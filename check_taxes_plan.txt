@@ -1,0 +1,77 @@
+plan: run python script on monthly schedule with cronjob, at a day of month where the previous months wallet data is guaranteed to have been gathered by fetchwallet. 00x** for cronjob where x is the earliest day number of month where that is true.
+
+fetchwallet cronjob schedule may have to be updated to also run at 001** ?
+fetchwallet has to already be <30 days due to CCP wallet age limit, but maybe that is currently on a cycle that is not very compatible with this use.
+
+what we have:
+    - SQL DB accessible with env var login
+    - brave API relay, full access with 1 env var login? similar to ccp scheme?
+    - python (readme says 3.12?) and cronjob
+      - prod python (3.12.10?) has required packages ? venv ? no info on github
+        I will make requirements.txt as usual if I use anything
+should be all we need, dont need front end or other overcomplications atm
+    I see flask / systemd service / nginx but we really dont need that.
+
+see we have a corporations sql table with
+    id                int              
+    corporation_name  varchar(255)     
+    character_id      int              
+    last_journal_date datetime         
+    active            tinyint default 1
+finance only opdates the 'last_journal_date', so rest must be pre-existing ?
+character_id is used for api request url, so logically:
+  -> id is from some char in that corp (maybe ceo) with corp api key ?
+  -> NOT the id of character responsible if alt corp ? do we have this info ?
+
+see we have a wallet_journal sql table with
+    id              bigint unsigned
+    corporation_id  int unsigned   
+    ref_type        varchar(128)   
+    journal_date    datetime       
+    description     varchar(4096)  
+    amount          bigint         
+    reason          varchar(4096)  
+    first_party_id  int unsigned   
+    second_party_id int unsigned   
+    context_id_type varchar(128)   
+    context_id      bigint unsigned
+assume this table is up to date from FetchWallet, mostly matches CCP API:
+ - division_id      cant know if people paid tax from other divisions...
+ - balance          no problem
+ ~ date             now journal_date, and modified to "%Y-%m-%d %H:%M:%S"
+ - tax              no problem, is character outgoing tax only, not corp
+ - tax_receiver_id  no problem, is character outgoing tax only, not corp
+
+WOULD LIKES:
+1 ) pull all divisions, so we can prevent that type of tax payment mistakes
+    - check old code still returns what was expected
+    - should not be a big impact compared to only division=1, corps likely
+      have almost all transactions in master, not many extra pages.
+    - can probably improve __read_wallet() efficiency if needed
+2 ) resource with corporation -> accountable corp_owner char name or id
+    otherwise we can only mail the corp ceo / the api key character
+    needed for alt corps, to evemail a char that hopefully logs in and reads
+      favorite: update the corporations table
+      otherwise: new corp_id-owner_id lookup table, or local file / env vars
+
+PLAN: 
+    add corp tax records schema & table
+
+    for evemails, use ccp api directly, not through brave relay
+        register and get client_id
+        create api key for evemail character {access_token+refresh_token}
+        will provide config file where these can be entered
+    if you want mails to go through brave api / neucore, not my work atm, gl
+
+    adapt existing code to use brave API & SQL DB
+        for all corp_to_check do:
+            - get taxable entry types from wallet journal
+            - get brave holding payments from wallet journal
+            - calculate tax totals & balance -> update tax records table
+            - make and send evemails
+    
+    test on my side with mock ENV + dummy sql DB with same schema + CCP API
+        replace with your API url and DB on deployment
+
+COOL FUTURE but unrealistic for now?
+3 ) slackbot integration ? I have only made discord bots so far, unlucky.
