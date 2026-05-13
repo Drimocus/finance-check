@@ -19,7 +19,7 @@ class FetchWallet:
             password=os.getenv('DB_PASSWORD'),
             database=os.getenv('DB_DATABASE'),
         )
-        self.__all_types_corporations = os.getenv('ALL_TYPES_CORPORATIONS')
+        self.__all_types_corporations = [int(x) for x in os.getenv('ALL_TYPES_CORPORATIONS').split(',')]
 
     def run(self):
         self.__read_wallets()
@@ -86,21 +86,31 @@ class FetchWallet:
         last_journal_date = ''
         for entry in json:
             # see also https://github.com/esi/eve-glue/blob/master/eve_glue/wallet_journal_ref.py
-            if corporation_id not in [int(x) for x in self.__all_types_corporations.split(',')] and \
+            if corporation_id not in self.__all_types_corporations and \
                entry['ref_type'] not in [
-                    'bounty_prizes', 'ess_escrow_transfer',
-                    'agent_mission_reward', 'agent_mission_time_bonus_reward', 'corporate_reward_payout',
-                    'brokers_fee', 'player_donation',
-                    'jump_clone_activation_fee', 'jump_clone_installation_fee', 'structure_gate_jump',
-                    'reprocessing_tax', 'industry_job_tax',
-                    'planetary_import_tax', 'planetary_export_tax',
-                    'office_rental_fee', 'project_discovery_reward'
+                    # tax income
+                    'bounty_prizes', 
+                    'ess_escrow_transfer',
+                    'agent_mission_reward', 
+                    'agent_mission_time_bonus_reward', 
+                    'project_discovery_reward',
+                    'daily_goal_payouts', 
+                    'freelance_jobs_reward',
+                    # isk removed from corp, (tax payments)
+                    'corporation_account_withdrawal', 
+                    # other types of interest ? not sure why not just all
+                    'corporate_reward_payout',
+                    'brokers_fee', 
+                    'player_donation',
+                    'jump_clone_activation_fee', 
+                    'jump_clone_installation_fee', 
+                    'structure_gate_jump',
+                    'reprocessing_tax', 
+                    'industry_job_tax',
+                    'planetary_import_tax', 
+                    'planetary_export_tax',
+                    'office_rental_fee', 
             ]:
-                """if entry['ref_type'] not in [
-                    'medal_issued', 'infrastructure_hub_maintenance',
-                    'corporation_account_withdrawal', 'market_provider_tax',
-                ]:
-                    print(entry['ref_type'] + ' ' + str(entry.get('amount', '')))"""
                 continue
 
             journal_date = entry['date'].replace('T', ' ').replace('Z', '')
