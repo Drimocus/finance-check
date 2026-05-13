@@ -31,10 +31,23 @@ class FetchWallet:
         corporation_data = cursor.fetchall()
         cursor.close()
 
+        num_divisions = 7
+
         for data in corporation_data:
             corporation_id = data[0]
             print('Read corporation {} wallet:'.format(corporation_id))
-            last_journal_date = self.__read_wallet(corporation_id, data[1], str(data[2] or ''))
+            for division in range(1, num_divisions + 1):
+                div_journal_date = self.__read_wallet(
+                    corporation_id = corporation_id, 
+                    character_id=data[1], 
+                    previous_journal_date=str(data[2] or ''), 
+                    division=division
+                )
+                if div_journal_date is None:
+                    print(f'    Division {division}: incomplete journal.')
+                # preserve journal date logic for division 1
+                if division == 1:
+                    last_journal_date = div_journal_date
             if last_journal_date:
                 print('    Success.')
                 cursor = self.__db.cursor()
@@ -44,18 +57,17 @@ class FetchWallet:
             else:
                 print('    Failed to read complete journal.')
 
-    def __read_wallet(self, corporation_id: int, character_id: int, previous_journal_date: str, page: int = 1,
+    def __read_wallet(self, corporation_id: int, character_id: int, previous_journal_date: str, division: int = 1, page: int = 1,
                       retry: int = 0) -> Optional[str]:
         """
         https://esi.evetech.net/ui/#/Wallet/get_corporations_corporation_id_wallets_division_journal
         30 days back, 3600 seconds (1h) cache
         """
 
-        print('    page {} ... '.format(page))
+        print('    {} page {} ... '.format(division, page))
 
         request_time = datetime.datetime.now()
 
-        division = 1
         url = '{}/corporations/{}/wallets/{}/journal/?page={}&datasource={}:{}'.format(
             self.__base_url, corporation_id, division, page, character_id, self.__login_name)
         r = requests.get(url, headers=self.__auth_header)
@@ -64,7 +76,7 @@ class FetchWallet:
                   .format(url, r.status_code, r.reason, r.text))
             if r.status_code != 403 and retry < 2:
                 print('retrying ({}) ...'.format(retry + 1))
-                return self.__read_wallet(corporation_id, character_id, previous_journal_date, page, retry + 1)
+                return self.__read_wallet(corporation_id, character_id, previous_journal_date, division, page, retry + 1)
             return None
         pages = int(r.headers['X-Pages'])
         json = r.json()
@@ -99,21 +111,54 @@ class FetchWallet:
 
             year_month = (int(journal_date[0:4]) * 100) + int(journal_date[5:7])
 
-            # Note: amount, balance and tax is double in json but bigint in database
-            sql = "INSERT IGNORE INTO wallet_journal " \
-                  "(id, corporation_id, ref_type, journal_date, journal_year_month, description, " \
-                  "amount, reason, first_party_id, second_party_id, context_id_type, context_id) " \
-                  "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-            data = [entry['id'], corporation_id, entry['ref_type'], journal_date, year_month, entry['description'],
-                    entry.get('amount', None), entry.get('reason', None), entry.get('first_party_id', None),
-                    entry.get('second_party_id', None), entry.get('context_id_type', None),
-                    entry.get('context_id', None)]
+            # amount, balance and tax is double in json but bigint in database
+            sql = """
+                INSERT IGNORE INTO wallet_journal (
+                    id, 
+                    corporation_id, 
+                    ref_type, 
+                    journal_date, 
+                    journal_year_month, 
+                    description, 
+                    amount, 
+                    reason, 
+                    first_party_id, 
+                    second_party_id, 
+                    context_id_type, 
+                    context_id,
+                    division
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                )
+            """
+            data = [
+                entry['id'], 
+                corporation_id, 
+                entry['ref_type'], 
+                journal_date, 
+                year_month, 
+                entry['description'], 
+                entry.get('amount', None), 
+                entry.get('reason', None), 
+                entry.get('first_party_id', None), 
+                entry.get('second_party_id', None), 
+                entry.get('context_id_type', None), 
+                entry.get('context_id', None), 
+                division
+            ]
             cursor.execute(sql, data)
         self.__db.commit()
         cursor.close()
 
-        if page < pages and previous_journal_date < first_journal_date:
-            self.__read_wallet(corporation_id, character_id, previous_journal_date, page + 1)
+        # previous_journal_date is latest date we already have, api page order
+        # is newest to oldest. can stop if we pass our previous_journal_date.
+        if page < pages:
+            # only apply to division 1 for now, has most entries.
+            if division == 1:
+                if previous_journal_date < first_journal_date:
+                    self.__read_wallet(corporation_id, character_id, previous_journal_date, division, page + 1)
+            else:
+                self.__read_wallet(corporation_id, character_id, previous_journal_date, division, page + 1)
 
         if last_journal_date == '':  # no bounties or mission rewards in journal
             return request_time.strftime('%Y-%m-%d %H:%M:%S')
