@@ -31,7 +31,12 @@ create table corporations
 -- 2022-07-07
 create index wallet_journal_ref_amount_index on wallet_journal (amount);
 
--- 2023-06-23
+-- 2023-06-23, journal_year_month = yyyymm digit: 202512, 202601, 202602, etc
 ALTER TABLE wallet_journal ADD journal_year_month INT unsigned NOT NULL after journal_date;
 CREATE index wallet_journal_year_month_index on wallet_journal (journal_year_month);
 UPDATE wallet_journal SET journal_year_month = (YEAR(journal_date) * 100) + MONTH(journal_date);
+
+-- 2026-05-13, track all divisions, so we can see payments from other divisions.
+ALTER TABLE wallet_journal ADD division INT unsigned NOT NULL after context_id;
+UPDATE wallet_journal SET division = 1 WHERE division = 0;
+CREATE index wallet_journal_division_index on wallet_journal (division);
