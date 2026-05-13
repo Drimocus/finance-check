@@ -158,7 +158,7 @@ class Index:
                   "CASE WHEN amount >= 0 THEN amount END AS amount_in, " \
                   "CASE WHEN amount < 0 THEN amount END AS amount_out " \
                   "FROM wallet_journal " \
-                  "WHERE corporation_id = %s AND journal_year_month = %s "
+                  "WHERE corporation_id = %s AND journal_year_month = %s AND division = 1 AND ref_type NOT IN ('daily_goal_payouts', 'corporation_account_withdrawal', 'freelance_jobs_reward') "
             params = [corporation, year_month]
             if type_all != '1':
                 sql += "AND ref_type IN ({}) ".format(', '.join(types_placeholder))
@@ -177,7 +177,7 @@ class Index:
                   "    SUM(CASE WHEN amount >= 0 THEN amount ELSE 0 END) AS amount_in, " \
                   "    SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END) AS amount_out " \
                   "FROM wallet_journal " \
-                  "WHERE corporation_id = %s AND journal_year_month >= %s AND journal_year_month < %s "
+                  "WHERE corporation_id = %s AND journal_year_month >= %s AND journal_year_month < %s AND division = 1 AND ref_type NOT IN ('daily_goal_payouts', 'corporation_account_withdrawal', 'freelance_jobs_reward') "
             params = [corporation, year_month, year_month+100]
             if type_all != '1':
                 sql += "AND ref_type IN ({}) ".format(', '.join(types_placeholder))
@@ -198,7 +198,7 @@ class Index:
                   "    SUM(CASE WHEN w.amount < 0 THEN w.amount ELSE 0 END) AS amount_out " \
                   "FROM wallet_journal w " \
                   "LEFT JOIN corporations c ON w.corporation_id = c.id " \
-                  "WHERE w.journal_year_month = %s "
+                  "WHERE w.journal_year_month = %s AND w.division = 1 AND w.ref_type NOT IN ('daily_goal_payouts', 'corporation_account_withdrawal', 'freelance_jobs_reward') "
             params = [year_month]
             if type_all != '1':
                 sql += "AND w.ref_type IN ({}) ".format(', '.join(types_placeholder))
