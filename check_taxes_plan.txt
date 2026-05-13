@@ -36,15 +36,17 @@ see we have a wallet_journal sql table with
     context_id_type varchar(128)   
     context_id      bigint unsigned
 assume this table is up to date from FetchWallet, mostly matches CCP API:
- - division_id      cant know if people paid tax from other divisions...
- - balance          no problem
- ~ date             now journal_date, and modified to "%Y-%m-%d %H:%M:%S"
- - tax              no problem, is character outgoing tax only, not corp
- - tax_receiver_id  no problem, is character outgoing tax only, not corp
+ - division_id          cant know if people paid tax from other divisions...
+ - balance              no problem
+ ~ date                 now journal_date, and modified to "%Y-%m-%d %H:%M:%S"
+ + journal_year_month   integer using yyyymm digit format, strange choice
+ - tax                  no problem, is character outgoing tax only, not corp
+ - tax_receiver_id      no problem, is character outgoing tax only, not corp
 
 WOULD LIKES:
 1 ) pull all divisions, so we can prevent that type of tax payment mistakes
     - check old code still returns what was expected
+      going to assume the previous lookups should still only return division 1
     - should not be a big impact compared to only division=1, corps likely
       have almost all transactions in master, not many extra pages.
     - can probably improve __read_wallet() efficiency if needed
