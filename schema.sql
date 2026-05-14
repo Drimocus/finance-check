@@ -49,3 +49,17 @@ ALTER TABLE corporations ADD is_alt_corp BOOLEAN NULL DEFAULT 0 after id;
 ALTER TABLE corporations ADD corporation_ceo_id BIGINT unsigned NULL after corporation_name;
 -- main character responsible for corp, may be equal to ceo id.
 ALTER TABLE corporations ADD corporation_owner_id BIGINT unsigned NULL after corporation_name;
+
+-- 2026-05-14, add tax records table
+-- isk amounts sourced from wallet_journal table, limited to same integer data.
+CREATE TABLE tax_records
+(
+    corporation_id      BIGINT unsigned  not null,
+    tax_month_date      datetime         not null,
+    taxable_income      BIGINT           not null,
+    corp_tax_amount     BIGINT           not null,
+    brave_tax_amount    BIGINT           not null,
+    brave_tax_payments  BIGINT           not null,
+    brave_tax_balance   BIGINT           not null,
+    PRIMARY KEY (corporation_id, tax_month_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

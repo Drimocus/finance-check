@@ -2,6 +2,8 @@
 
 import os
 import mysql.connector
+import requests
+from datetime import datetime, timedelta, timezone
 
 # mock env
 os.environ['API_BASE_URL'] = ''
@@ -58,12 +60,17 @@ db_cursor = brave_db.cursor()
 
 db_cursor.execute(
     '''
-        SELECT id, character_id
+        SELECT id, corporation_name, character_id, is_alt_corp, corporation_ceo_id, corporation_owner_id
         FROM corporations WHERE active = 1
     '''
 )
-corporation_data = db_cursor.fetchall()
+corporations = db_cursor.fetchall()
+print(corporations)
 
-print(corporation_data)
+# get some UTC (= CCP EVETIME) dates for last month
+current_date = datetime.now(tz=timezone.utc) + timedelta(days=31)
+prev_month_end = datetime(current_date.year, current_date.month, 1)
+prev_month_last_day = prev_month_end - timedelta(days=1)
+prev_month_start = datetime(prev_month_last_day.year, prev_month_last_day.month,1)
 db_cursor.close()
 brave_db.close()
