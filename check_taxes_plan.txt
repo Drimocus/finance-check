@@ -38,6 +38,7 @@ see we have a wallet_journal sql table with
 assume this table is up to date from FetchWallet, mostly matches CCP API:
  - division_id          cant know if people paid tax from other divisions...
  - balance              no problem
+ ~ amount               now an integer, not ccp double
  ~ date                 now journal_date, and modified to "%Y-%m-%d %H:%M:%S"
  + journal_year_month   integer using yyyymm digit format, strange choice
  - tax                  no problem, is character outgoing tax only, not corp
@@ -54,7 +55,9 @@ WOULD LIKES:
     otherwise we can only mail the corp ceo / the api key character
     needed for alt corps, to evemail a char that hopefully logs in and reads
       favorite: update the corporations table
+       - added corporation_owner_id, is_alt_corp, and corporation_ceo_id fields
       otherwise: new corp_id-owner_id lookup table, or local file / env vars
+      dont see this corp_id - owner_id info anywhere yet, manual add neeed?
 
 PLAN: 
     add corp tax records schema & table

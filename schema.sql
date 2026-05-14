@@ -40,3 +40,12 @@ UPDATE wallet_journal SET journal_year_month = (YEAR(journal_date) * 100) + MONT
 ALTER TABLE wallet_journal ADD division INT unsigned NOT NULL after context_id;
 UPDATE wallet_journal SET division = 1 WHERE division = 0;
 CREATE index wallet_journal_division_index on wallet_journal (division);
+
+-- 2026-05-14 add extra corp info columns, useful info for filtering / grouping
+-- and automatic contacting with evemail / possible future slack integration.
+-- allowing NULL, no edits to web gui code to add/edit corps needed for now.
+ALTER TABLE corporations ADD is_alt_corp BOOLEAN NULL DEFAULT 0 after id;
+-- current ingame ceo character, automated from ESI, stored to save api calls.
+ALTER TABLE corporations ADD corporation_ceo_id BIGINT unsigned NULL after corporation_name;
+-- main character responsible for corp, may be equal to ceo id.
+ALTER TABLE corporations ADD corporation_owner_id BIGINT unsigned NULL after corporation_name;
