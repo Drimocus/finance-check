@@ -26,13 +26,10 @@ JWK_ALGORITHM = "RS256"
 JWK_ISSUERS = ("login.eveonline.com", "https://login.eveonline.com")
 JWK_AUDIENCE = "EVE Online"
 
-SEND_MAIL_SCOPE = (
-    "esi-mail.send_mail.v1 "
-)
-SEND_MAIL_SCOPE = (
-    "esi-wallet.read_corporation_wallet.v1 "
-    "esi-wallet.read_corporation_wallets.v1 "
-)
+SEND_MAIL_SCOPE = "esi-mail.send_mail.v1"
+SCOPES = [
+    SEND_MAIL_SCOPE,
+]
 
 # this one is never sent, used to verify the communication between us
 CODE_VERIFIER = base64.urlsafe_b64encode(secrets.token_bytes(32))
@@ -41,7 +38,7 @@ LAST_STATE_UPDATE = datetime.now()
 UNIQUE_STATE = base64.urlsafe_b64encode(secrets.token_bytes(32))
 awaiting_response = False
 
-def create_access_token(scope=SEND_MAIL_SCOPE) -> Union[dict, None]:
+def create_access_token(scope=SCOPES) -> Union[dict, None]:
     """Prints the link to authorize ESI token for this app and starts a localhost server that listens for provided authorization and uses that authorization to request an access token.
     """
     global awaiting_response
@@ -141,7 +138,7 @@ def create_code_challenge():
     return code_challenge
 
 def create_esi_auth_url(
-    scope=SEND_MAIL_SCOPE
+    scope=SCOPES
 ):
     client_id = common.config["client_id"]
     base_auth_url = "https://login.eveonline.com/v2/oauth/authorize/"
@@ -149,7 +146,7 @@ def create_esi_auth_url(
         "response_type": "code",
         "redirect_uri": f"http://localhost:{common.config["localhost_port"]}/callback/",
         "client_id": client_id,
-        "scope": scope,
+        "scope": " ".join(scope),
         "state": update_unique_state(),
         "code_challenge": create_code_challenge(),
         "code_challenge_method": "S256"
@@ -159,7 +156,7 @@ def create_esi_auth_url(
     full_auth_url = "{}?{}".format(base_auth_url, string_params)
     return full_auth_url
 
-def authenticate(scope=SEND_MAIL_SCOPE):
+def authenticate(scope=SCOPES):
     esi_auth_url = create_esi_auth_url(scope=scope)
     print("\nOpen the following link in your browser:\n\n {} \n\n Once you "
           "have logged in as a character you will get redirected to "
