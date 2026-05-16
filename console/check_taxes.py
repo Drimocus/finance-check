@@ -10,14 +10,18 @@ from authentication import create_access_token
 from tax_mails import check_mailer_token, send_tax_mail
 import common
 
-# mock env
+# get some dates for last month
+current_date = datetime.now()
+tax_month_end = datetime(current_date.year, current_date.month, 1)
+tax_month_last_day = tax_month_end - timedelta(days=1)
+tax_month_start = datetime(tax_month_last_day.year, tax_month_last_day.month,1)
 
 # check mailer api key, refresh if expired
-if common.config["evemail_tax_reports"]:
+if common.config["evemail_main_corps"] or common.config["evemail_alt_corps"]:
     if common.config.get("mailer_character_api_key", None) is None:
         token = create_access_token()
         common.config["mailer_character_api_key"] = token
-        write_json_file(common.config, "config.json")
+        write_json_file(common.config, "config/tax_check_config.json")
     check_mailer_token()
 
 env_vars = {
@@ -118,13 +122,7 @@ def check_corp_info(corporations: list[dict]):
 corporations = select_active_corps()
 corporations = check_corp_info(corporations)
 
-# get some dates for last month
-current_date = datetime.now()
-prev_month_end = datetime(current_date.year, current_date.month, 1)
-prev_month_last_day = prev_month_end - timedelta(days=1)
-prev_month_start = datetime(prev_month_last_day.year, prev_month_last_day.month,1)
-
-print(current_date, prev_month_start, prev_month_end)
+print(f"check taxes: Current date: {current_date}, Tax month start: {tax_month_start}, Tax month end: {tax_month_end}")
 
 def insert_tax_record(tax_record: dict):
     db_cursor.execute(
@@ -178,8 +176,8 @@ def select_corporation_wallet_journal(
     description_contains: str = "",
     ref_types: list[str] = [], 
     divisions: list[int] = [],
-    date_min: datetime = prev_month_start, 
-    date_max: datetime = prev_month_end
+    date_min: datetime = tax_month_start, 
+    date_max: datetime = tax_month_end
 ) -> list[dict]:
     filters = []
     if corporation_id is not None:
@@ -223,13 +221,15 @@ def check_corp_tax(corporation: tuple):
         prev_balance = previous_record["brave_tax_balance"]
         prev_tax_month = previous_record["tax_month_date"]
     
-    if prev_month_start > prev_tax_month:
+    if corporation_name in common.config["excluded_corporations"]:
+        print(f"{num_checked}/{num_corporations}", corporation_name, "- excluded")
+    elif tax_month_start > prev_tax_month :
         tax_entries = select_corporation_wallet_journal(
             corporation_id,
             divisions=[1],
             ref_types=common.config["taxed_ref_types"],
-            date_min=prev_month_start, 
-            date_max=prev_month_end
+            date_min=tax_month_start, 
+            date_max=tax_month_end
         )
 
         if is_alt_corp:
@@ -243,8 +243,8 @@ def check_corp_tax(corporation: tuple):
             corporation_id,
             ref_types=["corporation_account_withdrawal"],
             description_contains=tax_receiving_corp,
-            date_min=prev_month_start, 
-            date_max=prev_month_end
+            date_min=tax_month_start, 
+            date_max=tax_month_end
         )
 
         taxable_income = sum([entry['amount'] for entry in tax_entries])
@@ -255,7 +255,7 @@ def check_corp_tax(corporation: tuple):
 
         tax_record = {
             "corporation_id": corporation_id,
-            "tax_month_date": prev_month_start,
+            "tax_month_date": tax_month_start,
             "taxable_income": taxable_income,
             "corp_tax_amount": corp_tax_amount,
             "brave_tax_amount": brave_tax_amount,
@@ -267,16 +267,27 @@ def check_corp_tax(corporation: tuple):
             "is_alt_corp": is_alt_corp,
         }
 
-        print(tax_record)
+        print(f"{num_checked}/{num_corporations}",tax_record)
         insert_tax_record(tax_record)
-        send_tax_mail(tax_record)
+        if is_alt_corp and common.config["evemail_alt_corps"]:
+            send_tax_mail(tax_record)
+        if not is_alt_corp and common.config["evemail_main_corps"]:
+            send_tax_mail(tax_record)
     else:
-        print(previous_record)
+        if previous_record is not None:
+            previous_record["corporation_name"] = corporation_name
+            previous_record["corporation_ceo_id"] = corporation_ceo_id
+            previous_record["corporation_owner_id"] = corporation_owner_id
+            previous_record["is_alt_corp"] = is_alt_corp
+        print(f"{num_checked}/{num_corporations}", previous_record, "- already taxed, old record")
 
     return
 
+num_corporations = len(corporations)
+num_checked = 1
 for corporation in corporations:
     check_corp_tax(corporation)
+    num_checked += 1
 
 brave_db.commit()
 db_cursor.close()

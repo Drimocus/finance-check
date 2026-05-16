@@ -33,7 +33,8 @@ def check_mailer_token():
                 "access_token": access_exc_str,
                 "refresh_token": refresh_exc_str,
             }
-            common.config["evemail_tax_reports"] = False
+            common.config["evemail_main_corps"] = False
+            common.config["evemail_alt_corps"] = False
             return
         if mailer_char_key is None:
             print(f"Failed to refresh token for mailer character key {access_exc_str}, mailing disabled\n")
@@ -41,7 +42,8 @@ def check_mailer_token():
                 "access_token": access_exc_str,
                 "refresh_token": refresh_exc_str,
             }
-            common.config["evemail_tax_reports"] = False
+            common.config["evemail_main_corps"] = False
+            common.config["evemail_alt_corps"] = False
             return
         mailer_token_fields = validate_eve_jwt(mailer_char_key["access_token"])
         common.config["mailer_character_api_key"] = {
@@ -50,12 +52,13 @@ def check_mailer_token():
         }
         print(f"Mailer character token refreshed, name: {mailer_token_fields["name"]}, expires at", token_exp_date(mailer_token_fields), "\n")
     
-    write_json_file(common.config, "config.json")
+    write_json_file(common.config, "config/tax_check_config.json")
 
     scope = mailer_token_fields.get("scp", [])
     if SEND_MAIL_SCOPE not in scope:
         print(f"Mailer character token does not have required scope '{SEND_MAIL_SCOPE}', mailing disabled\n")
-        common.config["evemail_tax_reports"] = False
+        common.config["evemail_main_corps"] = False
+        common.config["evemail_alt_corps"] = False
 
 def prefix_str(name_str: str, min_len) -> str:
     while len(name_str) < min_len:

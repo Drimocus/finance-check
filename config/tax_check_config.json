@@ -1,7 +1,8 @@
 {
     "alt_corps_base_tax": 100000000,
     "main_corps_base_tax": 0,
-    "evemail_tax_reports": true,
+    "evemail_main_corps": false,
+    "evemail_alt_corps": false,
     "client_id": "",
     "localhost_port": 8282,
     "alt_corps_tax_receiving_corp": "Brave United Holding",
@@ -9,14 +10,19 @@
     "alt_corps_tax_contact": "Yondu Quill",
     "main_corps_tax_contact": "Yondu Quill",
     "alt_corps_tax_help_channel": "#brave-united-officers",
-    "main_corps_tax_help_channel": "Brave United Holding",
+    "main_corps_tax_help_channel": "#lobby ping for bread",
     "taxed_ref_types": [
-        "bounty_prizes", 
-        "ess_escrow_transfer", 
-        "project_discovery_reward", 
-        "agent_mission_reward", 
-        "agent_mission_time_bonus_reward", 
-        "daily_goal_payouts", 
+        "bounty_prizes",
+        "ess_escrow_transfer",
+        "project_discovery_reward",
+        "agent_mission_reward",
+        "agent_mission_time_bonus_reward",
+        "daily_goal_payouts",
         "freelance_jobs_reward"
+    ],
+    "excluded_corporations": [
+        "Brave United Holding",
+        "Brave POS Boys",
+        "The Brave Dojo"
     ]
 }

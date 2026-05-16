@@ -26,4 +26,4 @@ def write_json_file(
     json.dump(contents, file, indent=4)
     file.close()
 
-config = read_json_file("config.json")
+config = read_json_file("config/tax_check_config.json")
