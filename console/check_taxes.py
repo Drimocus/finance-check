@@ -3,58 +3,34 @@
 import os
 import mysql.connector
 import requests
+import json
 from datetime import datetime, timedelta
+from common import write_json_file, BRAVE_DATEFORMAT
+from authentication import create_access_token
+import common
 
 # mock env
-os.environ['API_BASE_URL'] = ''
-os.environ['API_KEY'] = ''
-os.environ['API_EVE_LOGIN'] = ''
-os.environ['DB_HOST'] = ''
-os.environ['DB_PORT'] = ''
-os.environ['DB_USER'] = ''
-os.environ['DB_PASSWORD'] = ''
-os.environ['DB_DATABASE'] = ''
 
-BRAVE_DATEFORMAT = "%Y-%m-%d %H:%M:%S"
-TAXED_REF_TYPES = [
-    "bounty_prizes", 
-    "ess_escrow_transfer", 
-    "project_discovery_reward", 
-    "agent_mission_reward", 
-    "agent_mission_time_bonus_reward", 
-    "daily_goal_payouts", 
-    "freelance_jobs_reward"
-]
+# check mailer api key, refresh if expired
+if common.config["evemail_tax_reports"]:
+    if common.config.get("mailer_character_api_key", None) is None:
+        token = create_access_token()
+        common.config["mailer_character_api_key"] = token
+        write_json_file(common.config, "config.json")
+    check_mailer_token()
 
 env_vars = {
-    'api_base_url' : os.getenv('API_BASE_URL'),
-    'api_key' : os.getenv('API_KEY'),
-    # user info for brave api relay (datasource=char_id:api_login_name)
-    'api_login_name' : os.getenv('API_EVE_LOGIN'),
     'db_host' : os.getenv('DB_HOST'),
     'db_port' : os.getenv('DB_PORT', 3306),
     'db_user' : os.getenv('DB_USER'),
     'db_password' : os.getenv('DB_PASSWORD'),
     'db_database' : os.getenv('DB_DATABASE'),
-    # corporation_ids with all wallet entry ref_type's are tracked (dont need)
-    # 'all_types_corporations' : os.getenv('ALL_TYPES_CORPORATIONS'),
-
-    # WEB ONLY
-    # 'eve_app_id': os.getenv('EVE_APP_ID'),
-    # 'eve_app_secret': os.getenv('EVE_APP_SECRET'),
-    # 'eve_app_callback': os.getenv('EVE_APP_CALLBACK'),
-    # 'secret_key': os.getenv('SECRET_KEY'),
-    # 'check_alliances': os.getenv('CHECK_ALLIANCES'),
-    # 'check_corporations': os.getenv('CHECK_CORPORATIONS)'
 }
 
 for key in env_vars:
     if env_vars[key] is None:
         print(f'check_taxes: system environment variable {key} not configured')
         exit()
-
-env_vars['api_base_url'] += '/api/app/v2/esi/latest'
-api_auth_header = {'Authorization': 'Bearer ' + env_vars['api_key']}
 
 try:
     brave_db = mysql.connector.connect(
@@ -69,7 +45,7 @@ except mysql.connector.ProgrammingError as err:
     exit()
 db_cursor = brave_db.cursor(dictionary=True)
 
-def get_corp_info() -> list[dict]:
+def select_active_corps() -> list[dict]:
     db_cursor.execute(
         '''
             SELECT id, corporation_name, character_id, is_alt_corp, corporation_ceo_id, corporation_owner_id
@@ -136,9 +112,9 @@ def check_corp_info(corporations: list[dict]):
         # cant verify correct is_alt_corp, character_id, corporation_owner_id
     brave_db.commit()
     # refresh corp info from db after possible updates
-    return get_corp_info()
+    return select_active_corps()
 
-corporations = get_corp_info()
+corporations = select_active_corps()
 corporations = check_corp_info(corporations)
 
 # get some dates for last month
@@ -246,12 +222,11 @@ def check_corp_tax(corporation: tuple):
         prev_balance = previous_record["brave_tax_balance"]
         prev_tax_month = previous_record["tax_month_date"]
     
-    print(prev_month_start, prev_tax_month)
     if prev_month_start > prev_tax_month:
         tax_entries = select_corporation_wallet_journal(
             corporation_id,
             divisions=[1],
-            ref_types=TAXED_REF_TYPES,
+            ref_types=common.config["taxed_ref_types"],
             date_min=prev_month_start, 
             date_max=prev_month_end
         )
@@ -259,7 +234,7 @@ def check_corp_tax(corporation: tuple):
         payment_entries = select_corporation_wallet_journal(
             corporation_id,
             ref_types=["corporation_account_withdrawal"],
-            description_contains="to Brave United Holding",
+            description_contains=f"to {common.config['tax_receiving_corp']}",
             date_min=prev_month_start, 
             date_max=prev_month_end
         )
@@ -267,7 +242,8 @@ def check_corp_tax(corporation: tuple):
         taxable_income = sum([entry['amount'] for entry in tax_entries])
         brave_tax_payments = sum([entry['amount'] for entry in payment_entries]) * -1
         corp_tax_amount = int(taxable_income/2)
-        brave_tax_amount = taxable_income - corp_tax_amount + 100_000_000
+        brave_alt_corp_fee = common.config['alt_corp_fee'] if is_alt_corp else 0
+        brave_tax_amount = taxable_income - corp_tax_amount + brave_alt_corp_fee
         brave_tax_balance = prev_balance - brave_tax_amount + brave_tax_payments
 
         tax_record = {
@@ -277,7 +253,11 @@ def check_corp_tax(corporation: tuple):
             "corp_tax_amount": corp_tax_amount,
             "brave_tax_amount": brave_tax_amount,
             "brave_tax_payments": brave_tax_payments,
-            "brave_tax_balance": brave_tax_balance
+            "brave_tax_balance": brave_tax_balance,
+            "corporation_name": corporation_name,
+            "corporation_ceo_id": corporation_ceo_id,
+            "corporation_owner_id": corporation_owner_id,
+            "is_alt_corp": is_alt_corp,
         }
 
         print(tax_record)

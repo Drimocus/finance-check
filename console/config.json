@@ -1,0 +1,16 @@
+{
+    "alt_corp_fee": 100000000,
+    "evemail_tax_reports": true,
+    "client_id": "",
+    "localhost_port": 8282,
+    "tax_receiving_corp": "Brave United Holding",
+    "taxed_ref_types": [
+        "bounty_prizes", 
+        "ess_escrow_transfer", 
+        "project_discovery_reward", 
+        "agent_mission_reward", 
+        "agent_mission_time_bonus_reward", 
+        "daily_goal_payouts", 
+        "freelance_jobs_reward"
+    ]
+}
