@@ -7,6 +7,7 @@ import json
 from datetime import datetime, timedelta
 from common import write_json_file, BRAVE_DATEFORMAT
 from authentication import create_access_token
+from tax_mails import check_mailer_token, send_tax_mail
 import common
 
 # mock env
@@ -138,7 +139,7 @@ def insert_tax_record(tax_record: dict):
                 brave_tax_balance
             ) VALUES (
                 {tax_record["corporation_id"]},
-                '{tax_record["tax_month_date"]}',
+                '{tax_record["tax_month_date"].strftime(BRAVE_DATEFORMAT)}',
                 {tax_record["taxable_income"]},
                 {tax_record["corp_tax_amount"]},
                 {tax_record["brave_tax_amount"]},
@@ -231,10 +232,17 @@ def check_corp_tax(corporation: tuple):
             date_max=prev_month_end
         )
 
+        if is_alt_corp:
+            base_tax = common.config['alt_corps_base_tax']
+            tax_receiving_corp = common.config['alt_corps_tax_receiving_corp']
+        else:
+            base_tax = common.config['main_corps_base_tax']
+            tax_receiving_corp = common.config['main_corps_tax_receiving_corp']
+        
         payment_entries = select_corporation_wallet_journal(
             corporation_id,
             ref_types=["corporation_account_withdrawal"],
-            description_contains=f"to {common.config['tax_receiving_corp']}",
+            description_contains=tax_receiving_corp,
             date_min=prev_month_start, 
             date_max=prev_month_end
         )
@@ -242,13 +250,12 @@ def check_corp_tax(corporation: tuple):
         taxable_income = sum([entry['amount'] for entry in tax_entries])
         brave_tax_payments = sum([entry['amount'] for entry in payment_entries]) * -1
         corp_tax_amount = int(taxable_income/2)
-        brave_alt_corp_fee = common.config['alt_corp_fee'] if is_alt_corp else 0
-        brave_tax_amount = taxable_income - corp_tax_amount + brave_alt_corp_fee
+        brave_tax_amount = taxable_income - corp_tax_amount + base_tax
         brave_tax_balance = prev_balance - brave_tax_amount + brave_tax_payments
 
         tax_record = {
             "corporation_id": corporation_id,
-            "tax_month_date": prev_month_start.strftime(BRAVE_DATEFORMAT),
+            "tax_month_date": prev_month_start,
             "taxable_income": taxable_income,
             "corp_tax_amount": corp_tax_amount,
             "brave_tax_amount": brave_tax_amount,
@@ -262,6 +269,7 @@ def check_corp_tax(corporation: tuple):
 
         print(tax_record)
         insert_tax_record(tax_record)
+        send_tax_mail(tax_record)
     else:
         print(previous_record)
 
