@@ -37,7 +37,7 @@ CREATE index wallet_journal_year_month_index on wallet_journal (journal_year_mon
 UPDATE wallet_journal SET journal_year_month = (YEAR(journal_date) * 100) + MONTH(journal_date);
 
 -- 2026-05-13, track all divisions, so we can see payments from other divisions.
-ALTER TABLE wallet_journal ADD division INT unsigned NOT NULL after context_id;
+ALTER TABLE wallet_journal ADD division TINYINT unsigned NOT NULL after context_id;
 UPDATE wallet_journal SET division = 1 WHERE division = 0;
 CREATE index wallet_journal_division_index on wallet_journal (division);
 
