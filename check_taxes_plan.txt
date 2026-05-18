@@ -68,8 +68,10 @@ PLAN:
         + corporation_owner_id
 
     no auth, for evemails use brave api endpoint url
-        - assume our finance contact or server manager can pick a character with mail permissions, have it's neucore name+key as machine env vars.
-        + MAILER_NEUCORE_KEY and MAILER_NEUCORE_LOGIN_NAME environment vars
+        - assume our finance contact or server manager can pick a character with mail permissions, have its neucore name+key & char_id as env vars:
+          + MAILER_NEUCORE_KEY 
+          + MAILER_NEUCORE_LOGIN_NAME
+          + MAILER_CHARACTER_ID
 
     adapt existing code to use brave API & SQL DB
         for all corp_to_check do:
