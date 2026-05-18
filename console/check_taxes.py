@@ -23,11 +23,10 @@ env_vars = {
     'db_password' : os.getenv('DB_PASSWORD'),
     'db_database' : os.getenv('DB_DATABASE'),
 
-    'neucore_base_url' : os.getenv('API_BASE_URL') + '/api/app/v2/esi/latest',
+    'neucore_base_url' : os.getenv('API_BASE_URL'),
     'mailer_neucore_key' : os.getenv('MAILER_NEUCORE_KEY'),
     'mailer_neucore_login_name' : os.getenv('MAILER_NEUCORE_LOGIN_NAME'),
     'mailer_character_id' : os.getenv('MAILER_CHARACTER_ID'),
-    'db_database' : os.getenv('DB_DATABASE'),
 }
 
 for key in env_vars:
@@ -44,8 +43,9 @@ except ValueError:
 
 # I think we just assume the neucore key is valid?
 
+env_vars['neucore_base_url'] += '/api/app/v2/esi/latest'
 evemail_auth_header = {'Authorization': 'Bearer ' + env_vars['mailer_neucore_key']}
-evemail_endpoint = f"https://esi.evetech.net/characters/{env_vars['mailer_character_id']}/mail/?datasource={env_vars['mailer_neucore_key']}:{env_vars['mailer_neucore_login_name']}"
+evemail_endpoint = f"{env_vars['neucore_base_url']}/characters/{env_vars['mailer_character_id']}/mail/?datasource={env_vars['mailer_character_id']}:{env_vars['mailer_neucore_login_name']}"
 
 try:
     brave_db = mysql.connector.connect(
@@ -62,9 +62,9 @@ db_cursor = brave_db.cursor(dictionary=True)
 
 def select_active_corps() -> list[dict]:
     db_cursor.execute(
-        '''
+        f'''
             SELECT id, corporation_name, character_id, is_alt_corp, corporation_ceo_id, corporation_owner_id
-            FROM corporations WHERE active = 1
+            FROM {common.config["corp_info_table_name"]} WHERE active = 1
         '''
     )
     return db_cursor.fetchall()
@@ -103,7 +103,7 @@ def check_corp_info(corporations: list[dict]):
                 print(f'check_taxes: name mismatch between db and ccp, db: {corporation_name} ccp: {ccp_name["name"]}, using ccp name')
                 db_cursor.execute(
                     f'''
-                        UPDATE corporations
+                        UPDATE {common.config["corp_info_table_name"]}
                         SET corporation_name = '{ccp_name["name"]}'
                         WHERE id = {corporation_id};
                     '''
@@ -119,7 +119,7 @@ def check_corp_info(corporations: list[dict]):
                 corporation_info = corporation_info_res.json()
                 db_cursor.execute(
                     f'''
-                        UPDATE corporations
+                        UPDATE {common.config["corp_info_table_name"]}
                         SET corporation_ceo_id = '{corporation_info["ceo_id"]}'
                         WHERE id = {corporation_id};
                     '''
@@ -206,7 +206,7 @@ def select_corporation_wallet_journal(
     db_cursor.execute(
         f'''
             SELECT *
-            FROM wallet_journal 
+            FROM {common.config["wallet_journal_table_name"]} 
             {filter}
         '''
     )
@@ -259,7 +259,6 @@ def check_corp_tax(corporation: dict):
             date_max=tax_month_end
         )
 
-        taxable_income = sum([entry['amount'] for entry in tax_entries])
         brave_tax_payments = sum([entry['amount'] for entry in payment_entries]) * -1
         corp_tax_amount = int(taxable_income/2)
         brave_tax_amount = taxable_income - corp_tax_amount + base_tax
