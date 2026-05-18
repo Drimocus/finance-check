@@ -3,8 +3,6 @@
     "main_corps_base_tax": 0,
     "evemail_main_corps": false,
     "evemail_alt_corps": false,
-    "client_id": "",
-    "localhost_port": 8282,
     "alt_corps_tax_receiving_corp": "Brave United Holding",
     "main_corps_tax_receiving_corp": "Brave United Holding",
     "alt_corps_tax_contact": "Yondu Quill",
