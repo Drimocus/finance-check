@@ -5,67 +5,15 @@
 """
 
 import common as common
-from common import write_json_file
 import json
-from jose import ExpiredSignatureError
-from authentication import refresh_token, validate_eve_jwt, SEND_MAIL_SCOPE
-from datetime import datetime
-from requests.exceptions import HTTPError
 import requests
-
-def token_exp_date(token_fields):
-    return datetime.fromtimestamp(token_fields["exp"])
-
-def check_mailer_token():
-    client_id = common.config["client_id"]
-    mailer_char_key = common.config["mailer_character_api_key"]
-    access_exc_str = f"{mailer_char_key["access_token"][:10]}...{mailer_char_key["access_token"][-10:]} (expired -failed to refresh)"
-    refresh_exc_str = f"{mailer_char_key["refresh_token"][:10]}...{mailer_char_key["refresh_token"][-10:]} (failed to refresh)"
-    try:
-        mailer_token_fields = validate_eve_jwt(mailer_char_key["access_token"])
-        print(f"Mailer character token valid, name: {mailer_token_fields["name"]}, expires at", token_exp_date(mailer_token_fields), "\n")
-    except ExpiredSignatureError as e:
-        try:
-            mailer_char_key = refresh_token(mailer_char_key["refresh_token"], client_id)
-        except HTTPError as e:
-            print(f"Failed to refresh token for mailer character key {access_exc_str}, mailing disabled\n")
-            common.config["mailer_character_api_key"] = {
-                "access_token": access_exc_str,
-                "refresh_token": refresh_exc_str,
-            }
-            common.config["evemail_main_corps"] = False
-            common.config["evemail_alt_corps"] = False
-            return
-        if mailer_char_key is None:
-            print(f"Failed to refresh token for mailer character key {access_exc_str}, mailing disabled\n")
-            common.config["mailer_character_api_key"] = {
-                "access_token": access_exc_str,
-                "refresh_token": refresh_exc_str,
-            }
-            common.config["evemail_main_corps"] = False
-            common.config["evemail_alt_corps"] = False
-            return
-        mailer_token_fields = validate_eve_jwt(mailer_char_key["access_token"])
-        common.config["mailer_character_api_key"] = {
-            "access_token": mailer_char_key["access_token"],
-            "refresh_token": mailer_char_key["refresh_token"],
-        }
-        print(f"Mailer character token refreshed, name: {mailer_token_fields["name"]}, expires at", token_exp_date(mailer_token_fields), "\n")
-    
-    write_json_file(common.config, "config/tax_check_config.json")
-
-    scope = mailer_token_fields.get("scp", [])
-    if SEND_MAIL_SCOPE not in scope:
-        print(f"Mailer character token does not have required scope '{SEND_MAIL_SCOPE}', mailing disabled\n")
-        common.config["evemail_main_corps"] = False
-        common.config["evemail_alt_corps"] = False
 
 def prefix_str(name_str: str, min_len) -> str:
     while len(name_str) < min_len:
         name_str = " " + name_str
     return name_str
 
-def send_tax_mail(tax_record: dict) -> None:
+def prepare_tax_mail(tax_record: dict) -> tuple[str, list[dict], str]:
     tax_month_date = tax_record["tax_month_date"]
     corporation_name =  tax_record["corporation_name"]
     corporation_id = tax_record["corporation_id"]
@@ -151,15 +99,12 @@ def send_tax_mail(tax_record: dict) -> None:
         f"Previous Brave Tax Balance: Your corp's tax record before this month.\n"
         f"Current Brave Tax Balance: Your corp's current tax record with Brave. If it is negative, this is the amount of tax you still need to pay. If this balance is positive, you overpaid before and do not currently need to pay tax.\n"
     )
-    post_tax_mail(
-        common.config["mailer_character_api_key"]["access_token"],
-        recipients,
-        body,
-        mail_subject,
-    )
+
+    return body, recipients, mail_subject
 
 def post_tax_mail(
     access_token: str, 
+    evemail_endpoint: str,
     recipients: list[dict], 
     body: str, 
     subject: str, 
@@ -171,9 +116,6 @@ def post_tax_mail(
         "recipient_type": "alliance","character","corporation","mailing_list"
     ]
     """
-    mailer_token_fields = validate_eve_jwt(access_token)
-    mailer_char_id = mailer_token_fields["sub"]
-    ccp_mail_endpoint = f"https://esi.evetech.net/characters/{mailer_char_id}/mail"
     
     # corp / alliance recipient = only your own, only if enabled by ingame roles
     mail_info = {
@@ -188,7 +130,7 @@ def post_tax_mail(
     }
 
     res = requests.post(
-        url = ccp_mail_endpoint,
+        url = evemail_endpoint,
         data=json.dumps(mail_info),
         headers=headers
     )

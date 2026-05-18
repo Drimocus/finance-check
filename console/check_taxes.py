@@ -5,9 +5,8 @@ import mysql.connector
 import requests
 import json
 from datetime import datetime, timedelta
-from common import write_json_file, BRAVE_DATEFORMAT
-from authentication import create_access_token
-from tax_mails import check_mailer_token, send_tax_mail
+from common import BRAVE_DATEFORMAT
+from tax_mails import prepare_tax_mail, post_tax_mail
 import common
 
 # get some dates for last month
@@ -16,13 +15,6 @@ tax_month_end = datetime(current_date.year, current_date.month, 1)
 tax_month_last_day = tax_month_end - timedelta(days=1)
 tax_month_start = datetime(tax_month_last_day.year, tax_month_last_day.month,1)
 
-# check mailer api key, refresh if expired
-if common.config["evemail_main_corps"] or common.config["evemail_alt_corps"]:
-    if common.config.get("mailer_character_api_key", None) is None:
-        token = create_access_token()
-        common.config["mailer_character_api_key"] = token
-        write_json_file(common.config, "config/tax_check_config.json")
-    check_mailer_token()
 
 env_vars = {
     'db_host' : os.getenv('DB_HOST'),
@@ -30,12 +22,30 @@ env_vars = {
     'db_user' : os.getenv('DB_USER'),
     'db_password' : os.getenv('DB_PASSWORD'),
     'db_database' : os.getenv('DB_DATABASE'),
+
+    'neucore_base_url' : os.getenv('API_BASE_URL') + '/api/app/v2/esi/latest',
+    'mailer_neucore_key' : os.getenv('MAILER_NEUCORE_KEY'),
+    'mailer_neucore_login_name' : os.getenv('MAILER_NEUCORE_LOGIN_NAME'),
+    'mailer_character_id' : os.getenv('MAILER_CHARACTER_ID'),
+    'db_database' : os.getenv('DB_DATABASE'),
 }
 
 for key in env_vars:
     if env_vars[key] is None:
         print(f'check_taxes: system environment variable {key} not configured')
         exit()
+
+try:
+    env_vars['mailer_character_id'] = int(env_vars['mailer_character_id'])
+except ValueError:
+    print(f'check_taxes: mailer_character_id env var not an integer: {env_vars["mailer_character_id"]}')
+    exit()
+# is it similar to ccp esi token? -> could get character_id from token instead of needing it as an env var using validate_eve_jwt 
+
+# I think we just assume the neucore key is valid?
+
+evemail_auth_header = {'Authorization': 'Bearer ' + env_vars['mailer_neucore_key']}
+evemail_endpoint = f"https://esi.evetech.net/characters/{env_vars['mailer_character_id']}/mail/?datasource={env_vars['mailer_neucore_key']}:{env_vars['mailer_neucore_login_name']}"
 
 try:
     brave_db = mysql.connector.connect(
@@ -205,10 +215,9 @@ def select_corporation_wallet_journal(
         return []
     return res
 
-def check_corp_tax(corporation: tuple):
+def check_corp_tax(corporation: dict):
     corporation_id = corporation["id"]
     corporation_name = corporation["corporation_name"]
-    character_id = corporation["character_id"]
     is_alt_corp = corporation["is_alt_corp"]
     corporation_ceo_id = corporation["corporation_ceo_id"]
     corporation_owner_id = corporation["corporation_owner_id"]
@@ -269,10 +278,15 @@ def check_corp_tax(corporation: tuple):
 
         print(f"{num_checked}/{num_corporations}",tax_record)
         insert_tax_record(tax_record)
-        if is_alt_corp and common.config["evemail_alt_corps"]:
-            send_tax_mail(tax_record)
-        if not is_alt_corp and common.config["evemail_main_corps"]:
-            send_tax_mail(tax_record)
+        if (is_alt_corp and common.config["evemail_alt_corps"]) or (not is_alt_corp and common.config["evemail_main_corps"]):
+            body, recipients, mail_subject = prepare_tax_mail(tax_record)
+            post_tax_mail(
+                env_vars["mailer_neucore_key"],
+                evemail_endpoint,
+                recipients,
+                body,
+                mail_subject,
+            )
     else:
         if previous_record is not None:
             previous_record["corporation_name"] = corporation_name
@@ -289,6 +303,7 @@ for corporation in corporations:
     check_corp_tax(corporation)
     num_checked += 1
 
+# do a nice close and commit at the end just in case
 brave_db.commit()
 db_cursor.close()
 brave_db.close()
