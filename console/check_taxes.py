@@ -130,6 +130,9 @@ def check_corp_info(corporations: list[dict]):
     return select_active_corps()
 
 corporations = select_active_corps()
+if len(corporations) == 0:
+    print('check_taxes: no active corporations found in db, exiting')
+    exit()
 corporations = check_corp_info(corporations)
 
 print(f"check taxes: Current date: {current_date}, Tax month start: {tax_month_start}, Tax month end: {tax_month_end}")
@@ -295,7 +298,7 @@ def check_corp_tax(corporation: dict):
             previous_record["corporation_ceo_id"] = corporation_ceo_id
             previous_record["corporation_owner_id"] = corporation_owner_id
             previous_record["is_alt_corp"] = is_alt_corp
-        print(f"{num_checked}/{num_corporations}", previous_record, "- already taxed, old record")
+        print(f"{num_checked}/{num_corporations}", previous_record, "- already taxed, old record shown, no new evemail sent")
 
     return
 
