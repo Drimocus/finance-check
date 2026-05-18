@@ -4,13 +4,13 @@ fetchwallet cronjob schedule may have to be updated to also run at 001** ?
 fetchwallet has to already be <30 days due to CCP wallet age limit, but maybe that is currently on a cycle that is not very compatible with this use.
 
 what we have:
-    - SQL DB accessible with env var login
+    - SQL DB accessible with env var login (the separate finance-check one)
+      - disk space / memory limited?
     - brave API relay, full access with 1 env var login? similar to ccp scheme?
-    - python (readme says 3.12?) and cronjob
-      - prod python (3.12.10?) has required packages ? venv ? no info on github
-        I will make requirements.txt as usual if I use anything
+      - more strict rate limit (80%)
+    - python (3.12 .10?), probably won't need to update pipfile if we can avoid api key authentication setup
 should be all we need, dont need front end or other overcomplications atm
-    I see flask / systemd service / nginx but we really dont need that.
+    - do need to update the form for adding / changing corporations info for is_alt_corp and corporation_owner_id information.
 
 see we have a corporations sql table with
     id                int              
@@ -18,10 +18,9 @@ see we have a corporations sql table with
     character_id      int              
     last_journal_date datetime         
     active            tinyint default 1
+I assume this holds all corporations, BRAVE and BRUVE? not just BRUVE alt corps.
 finance only opdates the 'last_journal_date', so rest must be pre-existing ?
-character_id is used for api request url, so logically:
-  -> id is from some char in that corp (maybe ceo) with corp api key ?
-  -> NOT the id of character responsible if alt corp ? do we have this info ?
+ - is managed by tokens web page, selected character_id should be a char in corp with have esi access, seems editors choice and unverified, not guaranteed to be ceo / owner ?
 
 see we have a wallet_journal sql table with
     id              bigint unsigned
@@ -61,12 +60,16 @@ WOULD LIKES:
 
 PLAN: 
     add corp tax records schema & table
+    wallet_journal table:
+        + division column
+    corporations table:
+        + is_alt_corp
+        + corporation_ceo_id
+        + corporation_owner_id
 
-    for evemails, use ccp api directly, not through brave relay
-        register and get client_id
-        create api key for evemail character {access_token+refresh_token}
-        will provide config file where these can be entered
-    if you want mails to go through brave api / neucore, not my work atm, gl
+    no auth, for evemails use brave api endpoint url
+        - assume our finance contact or server manager can pick a character with mail permissions, have it's neucore name+key as machine env vars.
+        + MAILER_NEUCORE_KEY and MAILER_NEUCORE_LOGIN_NAME environment vars
 
     adapt existing code to use brave API & SQL DB
         for all corp_to_check do:
@@ -74,6 +77,15 @@ PLAN:
             - get brave holding payments from wallet journal
             - calculate tax totals & balance -> update tax records table
             - make and send evemails
+    
+    check main corp / alt corp tax method, apply appropriate one
+    separate toggle to enable evemails for alt corps & main corps
+     - don't know how main corp taxes are currently handled
+     - maybe add toggle to skip main corps entirely if we dont need tax reports for them either.
+    add option to exclude specific corporations from tax entirely
+     - in case of special untaxed corps
+
+    only store other division wallet_entries temporarily if space is a concern?
     
     test on my side with mock ENV + dummy sql DB with same schema + CCP API
         replace with your API url and DB on deployment
