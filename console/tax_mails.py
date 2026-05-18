@@ -134,7 +134,7 @@ def post_tax_mail(
         data=json.dumps(mail_info),
         headers=headers
     )
-    if res.status_code != 200:
+    if res.status_code != 201:
         print('Failed to send mail: Status Code: {}, Reason: {}, Body: {}'
               .format(res.status_code, res.reason, res.text))
     else:
