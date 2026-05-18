@@ -1,6 +1,8 @@
 {
     "alt_corps_base_tax": 100000000,
+    "alt_corps_exempt_income": 1000000000,
     "main_corps_base_tax": 0,
+    "main_corps_exempt_income": 0,
     "evemail_main_corps": false,
     "evemail_alt_corps": false,
     "alt_corps_tax_receiving_corp": "Brave United Holding",

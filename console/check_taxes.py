@@ -240,14 +240,17 @@ def check_corp_tax(corporation: dict):
             date_min=tax_month_start, 
             date_max=tax_month_end
         )
+        taxable_income = sum([entry['amount'] for entry in tax_entries])
 
         if is_alt_corp:
             base_tax = common.config['alt_corps_base_tax']
             tax_receiving_corp = common.config['alt_corps_tax_receiving_corp']
+            taxable_income = max(0, taxable_income - common.config['alt_corps_exempt_income'])
         else:
             base_tax = common.config['main_corps_base_tax']
             tax_receiving_corp = common.config['main_corps_tax_receiving_corp']
-        
+            taxable_income = max(0, taxable_income - common.config['main_corps_exempt_income'])
+
         payment_entries = select_corporation_wallet_journal(
             corporation_id,
             ref_types=["corporation_account_withdrawal"],
