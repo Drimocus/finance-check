@@ -1,4 +1,4 @@
-# called by cronjob, 002** : python console/check_taxes.py
+# called by cronjob, 0 0 2 * * : python console/check_taxes.py
 
 import os
 import mysql.connector
@@ -9,13 +9,13 @@ from common import BRAVE_DATEFORMAT
 from tax_mails import prepare_tax_mail, post_tax_mail
 import common
 
-# get some dates for last month
+# set up some dates for last month
 current_date = datetime.now()
 tax_month_end = datetime(current_date.year, current_date.month, 1)
 tax_month_last_day = tax_month_end - timedelta(days=1)
 tax_month_start = datetime(tax_month_last_day.year, tax_month_last_day.month,1)
 
-
+# check expected environment vars
 env_vars = {
     'db_host' : os.getenv('DB_HOST'),
     'db_port' : os.getenv('DB_PORT', 3306),
@@ -24,29 +24,38 @@ env_vars = {
     'db_database' : os.getenv('DB_DATABASE'),
 
     'neucore_base_url' : os.getenv('API_BASE_URL'),
-    'mailer_neucore_key' : os.getenv('MAILER_NEUCORE_KEY'),
-    'mailer_neucore_login_name' : os.getenv('MAILER_NEUCORE_LOGIN_NAME'),
-    'mailer_character_id' : os.getenv('MAILER_CHARACTER_ID'),
+    'finance_neucore_key' : os.getenv('API_KEY'),
+    'finance_eve_login' : os.getenv('API_EVE_LOGIN'),
+    'finance_mails_eve_login' : os.getenv('FINANCE_MAILS_EVE_LOGIN'),
+    'finance_mails_char_name' : os.getenv('FINANCE_MAILS_CHAR_NAME'),
 }
-
 for key in env_vars:
     if env_vars[key] is None:
         print(f'check_taxes: system environment variable {key} not configured')
         exit()
 
-try:
-    env_vars['mailer_character_id'] = int(env_vars['mailer_character_id'])
-except ValueError:
-    print(f'check_taxes: mailer_character_id env var not an integer: {env_vars["mailer_character_id"]}')
+# basic check of the eve mail token
+finance_mails_tokens_url = f'{env_vars["neucore_base_url"]}/api/app/v1/esi/eve-login/{env_vars["finance_mails_eve_login"]}/token-data'
+response = requests.get(finance_mails_tokens_url, headers={'Authorization': 'Bearer ' + env_vars['finance_neucore_key']})
+if response.status_code == 200:
+    finance_mails_tokens = response.json()
+else:
+    print(f"check_taxes: {response.status_code} error fetching tokens for neucore eve login: {env_vars['finance_mails_eve_login']}, can not send evemails.")
     exit()
-# is it similar to ccp esi token? -> could get character_id from token instead of needing it as an env var using validate_eve_jwt 
+if len(finance_mails_tokens) == 0:
+    print(f"check_taxes: no tokens added for neucore eve login: {env_vars['finance_mails_eve_login']}, can not send evemails.")
+    exit()
+finance_mails_char_id = None
+for token in finance_mails_tokens:
+    if token["characterName"] == env_vars["finance_mails_char_name"]:
+        finance_mails_char_id = token["characterId"]
+if finance_mails_char_id is None:
+    print(f"check_taxes: no token added to neucore eve login: {env_vars['finance_mails_eve_login']} matching FINANCE_MAILS_CHAR_NAME: {env_vars['finance_mails_char_name']}, can not send evemails.")
+    exit()
+# set neucore evemail endpoint for the specified mailer character
+evemail_endpoint = f"{env_vars['neucore_base_url']}/api/app/v2/esi/characters/{finance_mails_char_id}/mail/?datasource={finance_mails_char_id}:{env_vars['finance_mails_eve_login']}"
 
-# I think we just assume the neucore key is valid?
-
-env_vars['neucore_base_url'] += '/api/app/v2/esi/latest'
-evemail_auth_header = {'Authorization': 'Bearer ' + env_vars['mailer_neucore_key']}
-evemail_endpoint = f"{env_vars['neucore_base_url']}/characters/{env_vars['mailer_character_id']}/mail/?datasource={env_vars['mailer_character_id']}:{env_vars['mailer_neucore_login_name']}"
-
+# connect to original finance-check's mysql db (not neucore's)
 try:
     brave_db = mysql.connector.connect(
         host=env_vars['db_host'],
@@ -70,6 +79,10 @@ def select_active_corps() -> list[dict]:
     return db_cursor.fetchall()
 
 def check_corp_info(corporations: list[dict]):
+    """Utility check if corporations table is complete / up to date
+        - check if corporation name & id matches
+        - adds corporation_ceo_id if missing    
+    """
 
     db_corp_ids = [corporation["id"] for corporation in corporations]
 
@@ -128,14 +141,6 @@ def check_corp_info(corporations: list[dict]):
     brave_db.commit()
     # refresh corp info from db after possible updates
     return select_active_corps()
-
-corporations = select_active_corps()
-if len(corporations) == 0:
-    print('check_taxes: no active corporations found in db, exiting')
-    exit()
-corporations = check_corp_info(corporations)
-
-print(f"check taxes: Current date: {current_date}, Tax month start: {tax_month_start}, Tax month end: {tax_month_end}")
 
 def insert_tax_record(tax_record: dict):
     db_cursor.execute(
@@ -286,7 +291,7 @@ def check_corp_tax(corporation: dict):
         if (is_alt_corp and common.config["evemail_alt_corps"]) or (not is_alt_corp and common.config["evemail_main_corps"]):
             body, recipients, mail_subject = prepare_tax_mail(tax_record)
             post_tax_mail(
-                env_vars["mailer_neucore_key"],
+                env_vars["finance_neucore_key"],
                 evemail_endpoint,
                 recipients,
                 body,
@@ -302,6 +307,16 @@ def check_corp_tax(corporation: dict):
 
     return
 
+print(f"check taxes: Current date: {current_date}, Tax month start: {tax_month_start}, Tax month end: {tax_month_end}")
+
+# get all active corps
+corporations = select_active_corps()
+if len(corporations) == 0:
+    print('check_taxes: no active corporations found in db, exiting')
+    exit()
+corporations = check_corp_info(corporations)
+
+# check tax and send tax mails for each corp
 num_corporations = len(corporations)
 num_checked = 1
 for corporation in corporations:
