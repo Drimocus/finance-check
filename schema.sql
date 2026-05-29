@@ -63,3 +63,6 @@ CREATE TABLE tax_records
     brave_tax_balance   BIGINT           not null,
     PRIMARY KEY (corporation_id, tax_month_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 2026-05-29, add alliance if of corporation
+ALTER TABLE corporations ADD alliance_id BIGINT unsigned NOT NULL after id;

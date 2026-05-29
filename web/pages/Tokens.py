@@ -49,7 +49,7 @@ class Tokens:
         self.__fetch_names(all_want_corporation_ids)
 
         cursor = self.__db.cursor(dictionary=True)
-        cursor.execute("SELECT id, corporation_name, character_id, last_journal_date, active, is_alt_corp, corporation_ceo_id, corporation_owner_id FROM corporations")
+        cursor.execute("SELECT id, corporation_name, character_id, last_journal_date, active, alliance_id, is_alt_corp, corporation_ceo_id, corporation_owner_id FROM corporations")
         self.__configured_corporations = cursor.fetchall()
         cursor.close()
 
@@ -63,30 +63,30 @@ class Tokens:
         for corp_dict in self.__configured_corporations:
             corp_dict["want"] = corp_dict["id"] in all_want_corporation_ids
             self.__corporations[corp_dict["id"]] = corp_dict
-        for corp_id in all_want_corporation_ids:
-            if corp_id not in self.__corporations:
-                self.__corporations[corp_id] = {
-                    "id": corp_id,
-                    "corporation_name": self.__corporation_names[corp_id],
-                    "character_id": None,
-                    "last_journal_date": None,
-                    "active": None,
-                    "is_alt_corp": None,
-                    "want": True,
-                    "corporation_owner_id": None,
-                    "corporation_ceo_id": None,
-                }
+        for alliance_id, corp_ids in self.__want_corporations.items():
+            for corp_id in corp_ids:
+                if corp_id not in self.__corporations:
+                    self.__corporations[corp_id] = {
+                        "id": corp_id,
+                        "alliance_id": alliance_id,
+                        "corporation_name": self.__corporation_names[corp_id],
+                        "character_id": None,
+                        "last_journal_date": None,
+                        "active": None,
+                        "is_alt_corp": None,
+                        "want": True,
+                        "corporation_owner_id": None,
+                        "corporation_ceo_id": None,
+                    }
 
         return render_template(
             'tokens.html',
             character_id=session['character_id'],
             want_corporations=self.__want_corporations,
             configured_corporations=self.__configured_corporations,
-            find_configured_corporation=self.__find_configured_corporation,
             is_want_corporation=self.__is_want_corporation,
             find_available_tokens=self.__find_available_tokens,
             has_token=self.__has_token,
-            find_corporation_name=self.__find_corporation_name,
             corporations=self.__corporations
         )
 
@@ -176,11 +176,6 @@ class Tokens:
         else:
             self.__app.logger.error(response.content)
 
-    def __find_configured_corporation(self, corporation_id: int) -> Union[dict, None]:
-        for corporation in self.__configured_corporations:
-            if corporation['id'] == corporation_id:
-                return corporation
-
     def __is_want_corporation(self, corporation_id: int) -> bool:
         for alliance_id in self.__want_corporations.keys():
             for want_corporation_id in self.__want_corporations[alliance_id]:
@@ -200,8 +195,3 @@ class Tokens:
             if token['corporationId'] == corporation_id and token['characterId'] == character_id:
                 return True
         return False
-
-    def __find_corporation_name(self, corporation_id: int) -> str:
-        if corporation_id in self.__corporation_names:
-            return self.__corporation_names[corporation_id]
-        return ''
