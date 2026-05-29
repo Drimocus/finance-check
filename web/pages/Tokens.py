@@ -183,11 +183,11 @@ class Tokens:
     def __add_new_corporations(self, corp_ids, alliance_id=0) -> None:
         for corp_id in corp_ids:
             if self.__corporations.get(corp_id, None) is not None:
-                # was already added, but still wanted
+                # was already added, still wanted
                 self.__corporations[corp_id]["want"] = True
 
-                if alliance_id != self.__corporations[corp_id]["alliance_id"]:
-                    # corp changed alliance
+                if alliance_id != 0 and alliance_id != self.__corporations[corp_id]["alliance_id"]:
+                    # we know corp changed alliance, update
                     self.__corporations[corp_id]["alliance_id"] = alliance_id
                 continue
 
