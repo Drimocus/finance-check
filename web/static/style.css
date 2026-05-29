@@ -66,3 +66,7 @@ table.list td, table.list th {
     border: 1px solid grey;
     vertical-align: top;
 }
+
+table.list td.centre_cb {
+    text-align: center;
+}

@@ -62,7 +62,13 @@
                             {% endif %}
                         </td>
                         <td>{% if corporation.last_journal_date %}{{ corporation.last_journal_date }}{% endif %}</td>
-                        <td>{% if corporation.active %}Yes{% elif corporation.character_id %}No{% endif %}</td>
+                        <td class="centre_cb">
+                            {% if corporation.active %}
+                                <input type="checkbox" onchange="deactivate({{ corporation_id }})" checked>
+                            {% elif corporation.character_id %}
+                                <input type="checkbox" onchange="activate({{ corporation_id }})">
+                            {% endif %}
+                        </td>
 
                         <td>{% for token in tokens %}{{ token.characterId }}<br>{% endfor %}</td>
                         <td>{% for token in tokens %}{{ token.characterName }}<br>{% endfor %}</td>
@@ -179,5 +185,32 @@
     </table>
 
 </div>
+
+<script type="text/javascript">
+    function activate(corporation_id) {
+        const formData = new FormData()
+        formData.append("corporation_id", corporation_id);
+        showWaitBlock();
+        fetch(`/tokens/activate`, { 
+            method: 'POST', redirect: 'follow', body: formData, 
+        }).then(response => {
+            location.reload()
+            // could update page with javascript instead of reload
+            // would be much faster / smoother for user, dont need waitblock
+        });
+    }
+    function deactivate(corporation_id) {
+        const formData = new FormData()
+        formData.append("corporation_id", corporation_id);
+        showWaitBlock();
+        fetch(`/tokens/deactivate`, { 
+            method: 'POST', redirect: 'follow', body: formData, 
+        }).then(response => {
+            location.reload()
+            // could update page with javascript instead of reload
+            // would be much faster / smoother for user, dont need waitblock
+        });
+    }
+</script>
 
 {% endblock %}
