@@ -166,27 +166,26 @@
             </tr>
         </thead>
         {% for corporation in corporations if corporation.character_id and corporation.active and not corporation.want %}
-                <tbody>
-                    <tr>
-                        <td>
-                            <a href="https://evewho.com/corporation/{{ corporation.id }}" target="_blank"
-                               rel="noopener noreferrer" title="EveWho">{{ corporation.id }}</a>
-                        </td>
-                        <td>{{ corporation.corporation_name }}</td>
-                        <td>
-                            <a href="https://evewho.com/character/{{ corporation.character_id }}" target="_blank"
-                               rel="noopener noreferrer" title="EveWho">{{ corporation.character_id }}</a>
-                        </td>
-                        <td>{% if corporation.last_journal_date %}{{ corporation.last_journal_date }}{% endif %}</td>
-                        <td>
-                            <form method="post" action="/tokens/deactivate">
-                                <input type="hidden" name="corporation_id" value="{{ corporation.id }}">
-                                <input type="submit" value="deactivate" onclick="showWaitBlock()">
-                            </form>
-                        </td>
-                    </tr>
-                </tbody>
-            {% endif %}
+            <tbody>
+                <tr>
+                    <td>
+                        <a href="https://evewho.com/corporation/{{ corporation.id }}" target="_blank"
+                            rel="noopener noreferrer" title="EveWho">{{ corporation.id }}</a>
+                    </td>
+                    <td>{{ corporation.corporation_name }}</td>
+                    <td>
+                        <a href="https://evewho.com/character/{{ corporation.character_id }}" target="_blank"
+                            rel="noopener noreferrer" title="EveWho">{{ corporation.character_id }}</a>
+                    </td>
+                    <td>{% if corporation.last_journal_date %}{{ corporation.last_journal_date }}{% endif %}</td>
+                    <td>
+                        <form method="post" action="/tokens/deactivate">
+                            <input type="hidden" name="corporation_id" value="{{ corporation.id }}">
+                            <input type="submit" value="deactivate" onclick="showWaitBlock()">
+                        </form>
+                    </td>
+                </tr>
+            </tbody>
         {% endfor %}
     </table>
 
