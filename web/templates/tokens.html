@@ -46,7 +46,7 @@
             <tbody>
                 {% for corp_id, corp in corporations.items() %}
                     {% if corp.alliance_id == alliance_id%}
-                    {% set tokens = find_available_tokens(corp_id) %}
+                    {% set tokens = corp.tokens %}
                     <tr>
                         <td>
                             <a href="https://evewho.com/corporation/{{ corp_id }}" target="_blank"
@@ -127,7 +127,7 @@
                 <th>Action</th>
             </tr>
         </thead>
-        {% for corporation in configured_corporations if corporation.active %}
+        {% for corporation in corporations if corporation.character_id and corporation.active %}
             {% if not has_token(corporation.id, corporation.character_id) %}
                 <tbody>
                     <tr>
@@ -165,8 +165,7 @@
                 <th>Action</th>
             </tr>
         </thead>
-        {% for corporation in configured_corporations if corporation.active %}
-            {% if not is_want_corporation(corporation.id) %}
+        {% for corporation in corporations if corporation.character_id and corporation.active and not corporation.want %}
                 <tbody>
                     <tr>
                         <td>

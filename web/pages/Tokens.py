@@ -97,9 +97,6 @@ class Tokens:
             'tokens.html',
             character_id=session['character_id'],
             want_corporations=self.__want_corporations,
-            configured_corporations=self.__configured_corporations,
-            is_want_corporation=self.__is_want_corporation,
-            find_available_tokens=self.__find_available_tokens,
             has_token=self.__has_token,
             corporations=self.__corporations
         )
@@ -190,14 +187,8 @@ class Tokens:
         else:
             self.__app.logger.error(response.content)
 
-    def __is_want_corporation(self, corporation_id: int) -> bool:
-        return self.__corporations[corporation_id]["want"]
-
-    def __find_available_tokens(self, corporation_id: int) -> list:
-        return self.__corporations[corporation_id]["tokens"]
-
     def __has_token(self, corporation_id: int, character_id: int) -> bool:
-        for token in self.__find_available_tokens(corporation_id):
+        for token in self.__corporations[corporation_id]["tokens"]:
             if token['characterId'] == character_id:
                 return True
         return False
