@@ -78,7 +78,9 @@ class Tokens:
                         "corporation_owner_id": None,
                         "corporation_ceo_id": None,
                     }
-
+        # sort by corp name for readable webpage
+        self.__corporations = dict(sorted(self.__corporations.items(), key=lambda item: item[1]["corporation_name"]))
+        
         return render_template(
             'tokens.html',
             character_id=session['character_id'],
