@@ -116,7 +116,7 @@
     </table>
 
     <br>
-    <h3>Active, Missing Token</h3>
+    <h3>Configured API key, Active, Missing Token</h3>
     <table class="list">
         <thead>
             <tr>
@@ -127,13 +127,13 @@
                 <th>Action</th>
             </tr>
         </thead>
-        {% for corporation in corporations if corporation.character_id and corporation.active %}
-            {% if not has_token(corporation.id, corporation.character_id) %}
+        {% for corp_id, corporation in corporations.items() if corporation.character_id and corporation.active %}
+            {% if not has_token(corp_id, corporation.character_id) %}
                 <tbody>
                     <tr>
                         <td>
-                            <a href="https://evewho.com/corporation/{{ corporation.id }}" target="_blank"
-                               rel="noopener noreferrer" title="EveWho">{{ corporation.id }}</a>
+                            <a href="https://evewho.com/corporation/{{ corp_id }}" target="_blank"
+                               rel="noopener noreferrer" title="EveWho">{{ corp_id }}</a>
                         </td>
                         <td>{{ corporation.corporation_name }}</td>
                         <td>
@@ -143,7 +143,7 @@
                         <td>{% if corporation.last_journal_date %}{{ corporation.last_journal_date }}{% endif %}</td>
                         <td>
                             <form method="post" action="/tokens/deactivate">
-                                <input type="hidden" name="corporation_id" value="{{ corporation.id }}">
+                                <input type="hidden" name="corporation_id" value="{{ corp_id }}">
                                 <input type="submit" value="deactivate" onclick="showWaitBlock()">
                             </form>
                         </td>
@@ -154,7 +154,7 @@
     </table>
 
     <br>
-    <h3>Active, Don't Want</h3>
+    <h3>Configured API key, Active, Don't Want</h3>
     <table class="list">
         <thead>
             <tr>
@@ -165,12 +165,12 @@
                 <th>Action</th>
             </tr>
         </thead>
-        {% for corporation in corporations if corporation.character_id and corporation.active and not corporation.want %}
+        {% for corp_id, corporation in corporations.items() if corporation.character_id and corporation.active and not corporation.want %}
             <tbody>
                 <tr>
                     <td>
-                        <a href="https://evewho.com/corporation/{{ corporation.id }}" target="_blank"
-                            rel="noopener noreferrer" title="EveWho">{{ corporation.id }}</a>
+                        <a href="https://evewho.com/corporation/{{ corp_id }}" target="_blank"
+                            rel="noopener noreferrer" title="EveWho">{{ corp_id }}</a>
                     </td>
                     <td>{{ corporation.corporation_name }}</td>
                     <td>
@@ -180,7 +180,7 @@
                     <td>{% if corporation.last_journal_date %}{{ corporation.last_journal_date }}{% endif %}</td>
                     <td>
                         <form method="post" action="/tokens/deactivate">
-                            <input type="hidden" name="corporation_id" value="{{ corporation.id }}">
+                            <input type="hidden" name="corporation_id" value="{{ corp_id }}">
                             <input type="submit" value="deactivate" onclick="showWaitBlock()">
                         </form>
                     </td>
