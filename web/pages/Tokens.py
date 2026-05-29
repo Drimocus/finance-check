@@ -53,13 +53,7 @@ class Tokens:
         self.__configured_corporations = cursor.fetchall()
         cursor.close()
 
-        url = '{}/v1/esi/eve-login/{name}/token-data'.format(self.__core_base_url, name=self.__login_name)
-        response = requests.get(url, headers=self.__auth_header)
-        if response.status_code == 200:
-            self.__available_tokens = response.json()
-        else:
-            self.__app.logger.error(response.content)
-        
+        # make a nice corp id based lookup dict with all corps and their data
         for corp_dict in self.__configured_corporations:
             corp_dict["want"] = corp_dict["id"] in all_want_corporation_ids
             self.__corporations[corp_dict["id"]] = corp_dict
@@ -78,9 +72,27 @@ class Tokens:
                         "corporation_owner_id": None,
                         "corporation_ceo_id": None,
                     }
-        # sort by corp name for readable webpage
-        self.__corporations = dict(sorted(self.__corporations.items(), key=lambda item: item[1]["corporation_name"]))
-        
+        # sort dict by corp name for readable webpage
+        self.__corporations = dict(sorted(
+            self.__corporations.items(), 
+            key=lambda item: item[1]["corporation_name"]
+        ))
+
+        # add token info
+        url = f'{self.__core_base_url}/v1/esi/eve-login/{self.__login_name}/token-data'
+        response = requests.get(url, headers=self.__auth_header)
+        if response.status_code == 200:
+            self.__available_tokens = response.json()
+        else:
+            self.__app.logger.error(response.content)
+
+        for corp_id in self.__corporations:
+            tokens = []
+            for token in self.__available_tokens:
+                if token['corporationId'] == corp_id:
+                    tokens.append(token)
+            self.__corporations[corp_id]["tokens"] = tokens
+
         return render_template(
             'tokens.html',
             character_id=session['character_id'],
@@ -179,21 +191,13 @@ class Tokens:
             self.__app.logger.error(response.content)
 
     def __is_want_corporation(self, corporation_id: int) -> bool:
-        for alliance_id in self.__want_corporations.keys():
-            for want_corporation_id in self.__want_corporations[alliance_id]:
-                if want_corporation_id == corporation_id:
-                    return True
-        return False
+        return self.__corporations[corporation_id]["want"]
 
     def __find_available_tokens(self, corporation_id: int) -> list:
-        tokens = []
-        for token in self.__available_tokens:
-            if token['corporationId'] == corporation_id:
-                tokens.append(token)
-        return tokens
+        return self.__corporations[corporation_id]["tokens"]
 
     def __has_token(self, corporation_id: int, character_id: int) -> bool:
-        for token in self.__available_tokens:
-            if token['corporationId'] == corporation_id and token['characterId'] == character_id:
+        for token in self.__find_available_tokens(corporation_id):
+            if token['characterId'] == character_id:
                 return True
         return False
