@@ -86,9 +86,13 @@ class Tokens:
         return redirect(url_for('tokens'))
 
     def deactivate(self) -> Union[str, Response]:
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
         return self.__update_active(0)
 
     def activate(self) -> Union[str, Response]:
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
         return self.__update_active(1)
 
     def __update_active(self, active: int) -> Union[str, Response]:
