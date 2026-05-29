@@ -3,7 +3,6 @@
 {% block content %}
 
 <div class="tokens">
-
     <h3>Corporation Overview</h3>
     <table class="list">
         {% for alliance_id in want_corporations %}
@@ -45,36 +44,35 @@
                 </tr>
             </thead>
             <tbody>
-                {% for corporation_id in want_corporations[alliance_id] %}
-                    {% set corporation_name = find_corporation_name(corporation_id) %}
-                    {% set corporation = find_configured_corporation(corporation_id) %}
-                    {% set tokens = find_available_tokens(corporation_id) %}
+                {% for corp_id, corp in corporations.items() %}
+                    {% if corp.alliance_id == alliance_id%}
+                    {% set tokens = find_available_tokens(corp_id) %}
                     <tr>
                         <td>
-                            <a href="https://evewho.com/corporation/{{ corporation_id }}" target="_blank"
-                               rel="noopener noreferrer" title="EveWho">{{ corporation_id }}</a>
+                            <a href="https://evewho.com/corporation/{{ corp_id }}" target="_blank"
+                               rel="noopener noreferrer" title="EveWho">{{ corp_id }}</a>
                         </td>
-                        <td>{{ corporation_name }}</td>
+                        <td>{{ corp.corporation_name }}</td>
 
                         <td>
-                            {% if corporation.character_id %}
-                                <a href="https://evewho.com/character/{{ corporation.character_id }}" target="_blank"
-                                   rel="noopener noreferrer" title="EveWho">{{ corporation.character_id }}</a>
+                            {% if corp.character_id %}
+                                <a href="https://evewho.com/character/{{ corp.character_id }}" target="_blank"
+                                   rel="noopener noreferrer" title="EveWho">{{ corp.character_id }}</a>
                             {% endif %}
                         </td>
-                        <td>{% if corporation.last_journal_date %}{{ corporation.last_journal_date }}{% endif %}</td>
+                        <td>{% if corp.last_journal_date %}{{ corp.last_journal_date }}{% endif %}</td>
                         <td class="centre_cb">
-                            {% if corporation.active %}
-                                <input type="checkbox" onchange="deactivate({{ corporation_id }})" checked>
-                            {% elif corporation.character_id %}
-                                <input type="checkbox" onchange="activate({{ corporation_id }})">
+                            {% if corp.active %}
+                                <input type="checkbox" onchange="deactivate({{ corp_id }})" checked>
+                            {% elif corp.character_id %}
+                                <input type="checkbox" onchange="activate({{ corp_id }})">
                             {% endif %}
                         </td>
                         <td class="centre_cb">
-                            {% if corporations[corporation_id]["is_alt_corp"] %}
-                                <input type="checkbox" onchange="unsetAltCorp({{ corporation_id }})" checked>
+                            {% if corporations[corp_id]["is_alt_corp"] %}
+                                <input type="checkbox" onchange="unsetAltCorp({{ corp_id }})" checked>
                             {% else %}
-                                <input type="checkbox" onchange="setAltCorp({{ corporation_id }})">
+                                <input type="checkbox" onchange="setAltCorp({{ corp_id }})">
                             {% endif %}
                         </td>
 
@@ -91,10 +89,10 @@
 
                         <td>
                             {% for token in tokens %}
-                                {% if corporation.character_id == token.characterId %}
-                                    {% if not corporation.active %}
+                                {% if corp.character_id == token.characterId %}
+                                    {% if not corp.active %}
                                         <form method="post" action="/tokens/activate">
-                                            <input type="hidden" name="corporation_id" value="{{ corporation_id }}">
+                                            <input type="hidden" name="corporation_id" value="{{ corp_id }}">
                                             <input type="submit" value="activate" onclick="showWaitBlock()">
                                         </form>
                                     {% else %}
@@ -102,8 +100,8 @@
                                     {% endif %}
                                 {% else %}
                                     <form method="post" action="/tokens/add">
-                                        <input type="hidden" name="corporation_id" value="{{ corporation_id }}">
-                                        <input type="hidden" name="corporation_name" value="{{ corporation_name }}">
+                                        <input type="hidden" name="corporation_id" value="{{ corp_id }}">
+                                        <input type="hidden" name="corporation_name" value="{{ corp.corporation_name }}">
                                         <input type="hidden" name="character_id" value="{{ token.characterId }}">
                                         <input type="submit" value="Select" onclick="showWaitBlock()">
                                     </form>
@@ -111,6 +109,7 @@
                             {% endfor %}
                         </td>
                     </tr>
+                {% endif %}
                 {% endfor %}
             </tbody>
         {% endfor %}
