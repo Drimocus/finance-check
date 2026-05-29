@@ -16,6 +16,8 @@ class Tokens:
 
     __available_tokens = []
 
+    __corporations = {}
+
     def __init__(self, app: Flask):
         self.__app = app
         self.__esi_base_url = 'https://esi.evetech.net/latest'
@@ -41,13 +43,13 @@ class Tokens:
         if self.__check_corporations:
             self.__want_corporations[0] = [int(x) for x in self.__check_corporations.split(',')]
 
-        all_corporation_ids = []
+        all_want_corporation_ids = []
         for alliance_id in self.__want_corporations.keys():
-            all_corporation_ids = all_corporation_ids + self.__want_corporations[alliance_id]
-        self.__fetch_names(all_corporation_ids)
+            all_want_corporation_ids = all_want_corporation_ids + self.__want_corporations[alliance_id]
+        self.__fetch_names(all_want_corporation_ids)
 
         cursor = self.__db.cursor(dictionary=True)
-        cursor.execute("SELECT id, corporation_name, character_id, last_journal_date, active FROM corporations")
+        cursor.execute("SELECT id, corporation_name, character_id, last_journal_date, active, is_alt_corp, corporation_ceo_id, corporation_owner_id FROM corporations")
         self.__configured_corporations = cursor.fetchall()
         cursor.close()
 
@@ -57,6 +59,23 @@ class Tokens:
             self.__available_tokens = response.json()
         else:
             self.__app.logger.error(response.content)
+        
+        for corp_dict in self.__configured_corporations:
+            corp_dict["want"] = corp_dict["id"] in all_want_corporation_ids
+            self.__corporations[corp_dict["id"]] = corp_dict
+        for corp_id in all_want_corporation_ids:
+            if corp_id not in self.__corporations:
+                self.__corporations[corp_id] = {
+                    "id": corp_id,
+                    "corporation_name": self.__corporation_names[corp_id],
+                    "character_id": None,
+                    "last_journal_date": None,
+                    "active": None,
+                    "is_alt_corp": None,
+                    "want": True,
+                    "corporation_owner_id": None,
+                    "corporation_ceo_id": None,
+                }
 
         return render_template(
             'tokens.html',
@@ -67,7 +86,8 @@ class Tokens:
             is_want_corporation=self.__is_want_corporation,
             find_available_tokens=self.__find_available_tokens,
             has_token=self.__has_token,
-            find_corporation_name=self.__find_corporation_name
+            find_corporation_name=self.__find_corporation_name,
+            corporations=self.__corporations
         )
 
     def add(self) -> Union[str, Response]:
