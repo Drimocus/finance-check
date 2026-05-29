@@ -1,19 +1,24 @@
+"""
+Corp finance tokens page and routes.
+using env vars and mysql db, and neucore tokens.
+"""
 import os
-from typing import Union
 
 import mysql.connector
 import requests
-from flask import render_template, Response, url_for, session, Flask, request
+from flask import render_template, url_for, session, Flask, request
 from werkzeug.utils import redirect
-
+from werkzeug.wrappers import Response as wzResponse
 
 class Tokens:
-    __corporation_names = {}
+    """Tokens page and routes
+    
+        __corporations is a lookup dict for corp_id:int -> corp_data:dict
+            - makes it very easy to find corp info
+            - attributes match the sql database
 
-    __configured_corporations = []
-
-    __want_corporations = []
-
+            __corporations[98280055]["corporation_name"] -> "Second Sons"
+    """
     __available_tokens = []
 
     __corporations = {}
@@ -24,56 +29,51 @@ class Tokens:
         self.__core_base_url = os.getenv('API_BASE_URL') + '/api/app'
         self.__auth_header = {'Authorization': 'Bearer ' + os.getenv('API_KEY')}
         self.__login_name = os.getenv('API_EVE_LOGIN')
-        self.__check_alliances = os.getenv('CHECK_ALLIANCES')
-        self.__check_corporations = os.getenv('CHECK_CORPORATIONS')
+
+        check_alliances_str = os.getenv('CHECK_ALLIANCES')
+        if check_alliances_str is not None:
+            self.__check_alliance_ids = [int(x) for x in check_alliances_str.split(',')]
+        else:
+            self.__check_alliance_ids = []
+        check_corporations_str = os.getenv('CHECK_CORPORATIONS')
+        if check_corporations_str is not None:
+            self.__check_corporation_ids = [int(x) for x in check_corporations_str.split(',')]
+        else:
+            self.__check_corporation_ids = []
 
         self.__db = mysql.connector.connect(
             host=os.getenv('DB_HOST'),
-            port=os.getenv('DB_PORT', 3306),
+            port=os.getenv('DB_PORT', '3306'),
             user=os.getenv('DB_USER'),
             password=os.getenv('DB_PASSWORD'),
             database=os.getenv('DB_DATABASE'),
         )
 
-    def show(self) -> Union[str, Response]:
+    def show(self) -> str:
+        """Tokens page"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
 
-        self.__want_corporations = self.__fetch_alliance_corporations()
-        if self.__check_corporations:
-            self.__want_corporations[0] = [int(x) for x in self.__check_corporations.split(',')]
-        alliance_ids = list(self.__want_corporations)
-
-        all_want_corporation_ids = []
-        for alliance_id in alliance_ids:
-            all_want_corporation_ids = all_want_corporation_ids + self.__want_corporations[alliance_id]
-        self.__fetch_names(all_want_corporation_ids)
-
+        # start with database corporations
         cursor = self.__db.cursor(dictionary=True)
         cursor.execute("SELECT id, corporation_name, character_id, last_journal_date, active, alliance_id, is_alt_corp, corporation_ceo_id, corporation_owner_id FROM corporations")
-        self.__configured_corporations = cursor.fetchall()
+        corporations = cursor.fetchall()
         cursor.close()
 
-        # make a nice corp id based lookup dict with all corps and their data
-        for corp_dict in self.__configured_corporations:
-            corp_dict["want"] = corp_dict["id"] in all_want_corporation_ids
+        # convert into lookup dictionary for easier use
+        for corp_dict in corporations:
+            corp_dict["want"] = False
             self.__corporations[corp_dict["id"]] = corp_dict
-        for alliance_id, corp_ids in self.__want_corporations.items():
-            for corp_id in corp_ids:
-                if corp_id not in self.__corporations:
-                    self.__corporations[corp_id] = {
-                        "id": corp_id,
-                        "alliance_id": alliance_id,
-                        "corporation_name": self.__corporation_names[corp_id],
-                        "character_id": None,
-                        "last_journal_date": None,
-                        "active": None,
-                        "is_alt_corp": None,
-                        "want": True,
-                        "corporation_owner_id": "",
-                        "corporation_ceo_id": "",
-                        "brave_tax_balance": "",
-                    }
+
+        # check / add wanted alliances & corps in env vars
+        for alliance_id in self.__check_alliance_ids:
+            self.__fetch_alliance_corporations(alliance_id)
+        self.__add_new_corporations(self.__check_corporation_ids)
+
+        # update names for all corps
+        all_corporation_ids = list(self.__corporations)
+        self.__fetch_names(all_corporation_ids)
+
         # sort dict by corp name for readable webpage
         self.__corporations = dict(sorted(
             self.__corporations.items(), 
@@ -87,27 +87,29 @@ class Tokens:
             self.__available_tokens = response.json()
         else:
             self.__app.logger.error(response.content)
-
         for corp_id in self.__corporations:
             tokens = []
             for token in self.__available_tokens:
                 if token['corporationId'] == corp_id:
                     tokens.append(token)
             self.__corporations[corp_id]["tokens"] = tokens
-        
+
+        # add tax balance
         last_tax_records = self.__last_tax_records()
         for tax_record in last_tax_records:
             self.__corporations[tax_record["corporation_id"]]["brave_tax_balance"] = tax_record["brave_tax_balance"]
 
+        # render page
         return render_template(
             'tokens.html',
             character_id=session['character_id'],
-            alliance_ids=alliance_ids,
+            alliance_ids=self.__check_alliance_ids,
             has_token=self.__has_token,
             corporations=self.__corporations
         )
 
-    def add(self) -> Union[str, Response]:
+    def add(self) -> wzResponse:
+        """add corp route"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
         cursor = self.__db.cursor()
@@ -124,17 +126,19 @@ class Tokens:
         cursor.close()
         return redirect(url_for('tokens'))
 
-    def deactivate(self) -> Union[str, Response]:
+    def deactivate(self) -> wzResponse:
+        """deactivate corp route"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
         return self.__update_active(0)
 
-    def activate(self) -> Union[str, Response]:
+    def activate(self) -> wzResponse:
+        """activate corp route"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
         return self.__update_active(1)
 
-    def __update_active(self, active: int) -> Union[str, Response]:
+    def __update_active(self, active: int) -> wzResponse:
         cursor = self.__db.cursor()
 
         sql = "UPDATE corporations SET active = %s WHERE id = %s"
@@ -145,17 +149,19 @@ class Tokens:
         cursor.close()
         return redirect(url_for('tokens'))
 
-    def unset_alt_corp(self) -> Union[str, Response]:
+    def unset_alt_corp(self) -> wzResponse:
+        """unset alt corp route"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
         return self.__update_alt_corp(0)
 
-    def set_alt_corp(self) -> Union[str, Response]:
+    def set_alt_corp(self) -> wzResponse:
+        """set alt corp route"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
         return self.__update_alt_corp(1)
 
-    def __update_alt_corp(self, active: int) -> Union[str, Response]:
+    def __update_alt_corp(self, active: int) -> wzResponse:
         cursor = self.__db.cursor()
 
         sql = "UPDATE corporations SET is_alt_corp = %s WHERE id = %s"
@@ -165,7 +171,7 @@ class Tokens:
 
         cursor.close()
         return redirect(url_for('tokens'))
-    
+
     def __last_tax_records(self) -> list[dict]:
         cursor = self.__db.cursor(dictionary=True)
         sql = "select corporation_id, brave_tax_balance, tax_month_date FROM tax_records as data WHERE tax_month_date = (SELECT MAX(tax_month_date) FROM tax_records WHERE corporation_id = data.corporation_id);"
@@ -174,30 +180,48 @@ class Tokens:
         cursor.close()
         return results
 
-    def __fetch_alliance_corporations(self) -> dict:
-        # return {99003214: [98024275], 99010079: [98112599, 98209548]}
-        want_alliance_corporations = {}
-        if self.__check_alliances:
-            for alliance_id in [int(x) for x in self.__check_alliances.split(',')]:
-                url = '{}/alliances/{alliance_id}/corporations/'.format(self.__esi_base_url, alliance_id=alliance_id)
-                response = requests.get(url)
-                if response.status_code == 200:
-                    want_alliance_corporations[alliance_id] = response.json()
-                else:
-                    self.__app.logger.error(response.content)
-        return want_alliance_corporations
+    def __add_new_corporations(self, corp_ids, alliance_id=0) -> None:
+        for corp_id in corp_ids:
+            if self.__corporations.get(corp_id, None) is not None:
+                # was already added, but still wanted
+                self.__corporations[corp_id]["want"] = True
 
-    def __fetch_names(self, corporation_ids: []) -> None:
-        """self.__corporation_names = {
-           98024275: 'Rational Chaos Inc.', 98112599: 'Black Queen Enterprises', 98209548: 'Brave Little Toaster.',
-           98645283: 'Brave United Holding', 98599810: 'Brave Nubs'}
-        return"""
+                if alliance_id != self.__corporations[corp_id]["alliance_id"]:
+                    # corp changed alliance
+                    self.__corporations[corp_id]["alliance_id"] = alliance_id
+                continue
+
+            # corp not in database yet, add what we know
+            self.__corporations[corp_id] = {
+                "id": corp_id, 
+                "alliance_id": alliance_id, 
+                "want": True,
+                "character_id": None,
+                "last_journal_date": None,
+                "active": 1,
+                "is_alt_corp": 0,
+                "corporation_owner_id": None,
+                "corporation_ceo_id": None,
+                "brave_tax_balance": 0,
+            }
+
+    def __fetch_alliance_corporations(self, alliance_id) -> None:
+        # return {99003214: [98024275], 99010079: [98112599, 98209548]}
+        url = '{}/alliances/{alliance_id}/corporations/'.format(self.__esi_base_url, alliance_id=alliance_id)
+        response = requests.get(url)
+        if response.status_code == 200:
+            self.__add_new_corporations(response.json(), alliance_id)
+        else:
+            self.__app.logger.error(response.content)
+
+    def __fetch_names(self, corporation_ids: list[int]) -> None:
         url = '{}/universe/names/'.format(self.__esi_base_url)
-        response = requests.post(url, json=corporation_ids)  # Note: corporation_ids cannot have more than 1000 items
+        response = requests.post(url, json=corporation_ids)
+        # Note: corporation_ids cannot have more than 1000 items
         if response.status_code == 200:
             for item in response.json():
                 if item['category'] == 'corporation':
-                    self.__corporation_names[item['id']] = item['name']
+                    self.__corporations[item['id']]["corporation_name"] = item['name']
         else:
             self.__app.logger.error(response.content)
 
