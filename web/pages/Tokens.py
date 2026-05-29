@@ -70,9 +70,9 @@ class Tokens:
             self.__fetch_alliance_corporations(alliance_id)
         self.__add_new_corporations(self.__check_corporation_ids)
 
-        # update names for all corps
-        all_corporation_ids = list(self.__corporations)
-        self.__fetch_names(all_corporation_ids)
+        # update ceo's and names
+        self.__update_ceos()
+        self.__update_names()
 
         # sort dict by corp name for readable webpage
         self.__corporations = dict(sorted(
@@ -214,7 +214,10 @@ class Tokens:
         else:
             self.__app.logger.error(response.content)
 
-    def __fetch_names(self, corporation_ids: list[int]) -> None:
+    def __update_names(self) -> None:
+        # update names for all corps
+        corporation_ids = list(self.__corporations)
+
         url = '{}/universe/names/'.format(self.__esi_base_url)
         response = requests.post(url, json=corporation_ids)
         # Note: corporation_ids cannot have more than 1000 items
@@ -224,6 +227,25 @@ class Tokens:
                     self.__corporations[item['id']]["corporation_name"] = item['name']
         else:
             self.__app.logger.error(response.content)
+
+    def __update_ceos(self, missing_only=True, limit=10) -> None:
+        """limit to 10 for test because it is slow / rate limit sketchy"""
+        for corp_id, corp in self.__corporations.items():
+            if not missing_only or corp["corporation_ceo_id"] is None:
+                url = f'{self.__esi_base_url}/corporations/{corp_id}'
+                self.__app.logger.error(url)
+                response = requests.get(url)
+                if response.status_code == 200:
+                    corp_info = response.json()
+                    corp["corporation_ceo_id"] = corp_info["ceo_id"]
+                    # also set these while we have the info result
+                    corp["corporation_name"] = corp_info["name"]
+                    corp["alliance_id"] = corp_info.get("alliance_id", 0)
+                else:
+                    self.__app.logger.error(response.content)
+            limit -= 1
+            if limit < 1:
+                return
 
     def __has_token(self, corporation_id: int, character_id: int) -> bool:
         for token in self.__corporations[corporation_id]["tokens"]:
