@@ -45,7 +45,7 @@
             </thead>
             <tbody>
                 {% for corp_id, corp in corporations.items() %}
-                    {% if corp.alliance_id == alliance_id%}
+                    {% if corp.want and corp.alliance_id == alliance_id%}
                     {% set tokens = corp.tokens %}
                     <tr>
                         <td>
