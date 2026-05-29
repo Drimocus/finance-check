@@ -36,6 +36,15 @@ def tokens_deactivate() -> Union[str, Response]:
 def tokens_activate() -> Union[str, Response]:
     return Tokens(app).activate()
 
+@app.route('/tokens/set_alt_corp', methods=['POST'])
+def set_alt_corp() -> Union[str, Response]:
+    return Tokens(app).set_alt_corp()
+
+
+@app.route('/tokens/unset_alt_corp', methods=['POST'])
+def unset_alt_corp() -> Union[str, Response]:
+    return Tokens(app).unset_alt_corp()
+
 
 @app.route('/auth/login')
 def auth_login() -> str:

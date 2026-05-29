@@ -128,6 +128,27 @@ class Tokens:
         cursor.close()
         return redirect(url_for('tokens'))
 
+    def unset_alt_corp(self) -> Union[str, Response]:
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
+        return self.__update_alt_corp(0)
+
+    def set_alt_corp(self) -> Union[str, Response]:
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
+        return self.__update_alt_corp(1)
+
+    def __update_alt_corp(self, active: int) -> Union[str, Response]:
+        cursor = self.__db.cursor()
+
+        sql = "UPDATE corporations SET is_alt_corp = %s WHERE id = %s"
+        data = [active, request.form.get('corporation_id')]
+        cursor.execute(sql, data)
+        self.__db.commit()
+
+        cursor.close()
+        return redirect(url_for('tokens'))
+
     def __fetch_alliance_corporations(self) -> dict:
         # return {99003214: [98024275], 99010079: [98112599, 98209548]}
         want_alliance_corporations = {}

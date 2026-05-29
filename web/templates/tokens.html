@@ -24,7 +24,7 @@
                 </tr>
                 <tr>
                     <th colspan="2">WANT</th>
-                    <th colspan="3">CONFIGURED</th>
+                    <th colspan="4">CONFIGURED</th>
                     <th colspan="3">AVAILABLE (valid tokens only)</th>
                     <th>Match</th>
                 </tr>
@@ -35,6 +35,7 @@
                     <td>Character ID</td>
                     <td>Last Journal Date</td>
                     <td>Active</td>
+                    <td>Alt Corp</td>
 
                     <td>Character ID</td>
                     <td>Character Name</td>
@@ -67,6 +68,13 @@
                                 <input type="checkbox" onchange="deactivate({{ corporation_id }})" checked>
                             {% elif corporation.character_id %}
                                 <input type="checkbox" onchange="activate({{ corporation_id }})">
+                            {% endif %}
+                        </td>
+                        <td class="centre_cb">
+                            {% if corporations[corporation_id]["is_alt_corp"] %}
+                                <input type="checkbox" onchange="unsetAltCorp({{ corporation_id }})" checked>
+                            {% else %}
+                                <input type="checkbox" onchange="setAltCorp({{ corporation_id }})">
                             {% endif %}
                         </td>
 
@@ -204,6 +212,30 @@
         formData.append("corporation_id", corporation_id);
         showWaitBlock();
         fetch(`/tokens/deactivate`, { 
+            method: 'POST', redirect: 'follow', body: formData, 
+        }).then(response => {
+            location.reload()
+            // could update page with javascript instead of reload
+            // would be much faster / smoother for user, dont need waitblock
+        });
+    }
+    function setAltCorp(corporation_id) {
+        const formData = new FormData()
+        formData.append("corporation_id", corporation_id);
+        showWaitBlock();
+        fetch(`/tokens/set_alt_corp`, { 
+            method: 'POST', redirect: 'follow', body: formData, 
+        }).then(response => {
+            location.reload()
+            // could update page with javascript instead of reload
+            // would be much faster / smoother for user, dont need waitblock
+        });
+    }
+    function unsetAltCorp(corporation_id) {
+        const formData = new FormData()
+        formData.append("corporation_id", corporation_id);
+        showWaitBlock();
+        fetch(`/tokens/unset_alt_corp`, { 
             method: 'POST', redirect: 'follow', body: formData, 
         }).then(response => {
             location.reload()
