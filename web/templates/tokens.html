@@ -4,6 +4,18 @@
 
 <div class="tokens">
     <h3>Corporation Overview</h3>
+    <dl>
+        <dt>Tax Data fields:</dt>
+        <dl>
+            <dt>CEO ID</dt><dd>Automatically updated through ESI, the CEO character always receives ingame tax report evemails.</dd>
+            <dt>Owner ID</dt><dd>Optional main contact character in case it is different from the ingame CEO, like with alt or holding corps/characters. If set this character will also receive ingame tax report evemails.</dd>
+        <dt>Alt Corp</dt><dd>Whether or not the corp is an alt corp for someone</dd>
+        <dt>Tax Balance</dt>
+            <dd>If negative: The total tax the corp still owes Brave</dd>
+            <dd>If positive: The amount by which the corporation still has overpaid it's tax</dd>
+        </dl>
+    </dl>
+
     <table class="list">
         {% for alliance_id in alliance_ids %}
             <thead>
