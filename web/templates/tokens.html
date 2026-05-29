@@ -25,7 +25,7 @@
                     <th colspan="2">WANT</th>
                     <th colspan="4">CONFIGURED</th>
                     <th colspan="3">AVAILABLE (valid tokens only)</th>
-                    <th>Match</th>
+                    <th colspan="4">TAX DATA</th>
                 </tr>
                 <tr>
                     <td>ID</td>
@@ -34,13 +34,16 @@
                     <td>Character ID</td>
                     <td>Last Journal Date</td>
                     <td>Active</td>
-                    <td>Alt Corp</td>
 
                     <td>Character ID</td>
                     <td>Character Name</td>
                     <td>Last Checked</td>
+                    <td title="CONFIGURED character ID matches one of the AVAILABLE IDs">Action</td>
 
-                    <td title="CONFIGURED character ID matches one of the AVAILABLE IDs">*</td>
+                    <td>CEO ID</td>
+                    <td>Owner ID</td>
+                    <td>Alt Corp?</td>
+                    <td>Tax Balance</td>
                 </tr>
             </thead>
             <tbody>
@@ -66,13 +69,6 @@
                                 <input type="checkbox" onchange="deactivate({{ corp_id }})" checked>
                             {% elif corp.character_id %}
                                 <input type="checkbox" onchange="activate({{ corp_id }})">
-                            {% endif %}
-                        </td>
-                        <td class="centre_cb">
-                            {% if corporations[corp_id]["is_alt_corp"] %}
-                                <input type="checkbox" onchange="unsetAltCorp({{ corp_id }})" checked>
-                            {% else %}
-                                <input type="checkbox" onchange="setAltCorp({{ corp_id }})">
                             {% endif %}
                         </td>
 
@@ -107,6 +103,20 @@
                                     </form>
                                 {% endif %}
                             {% endfor %}
+                        </td>
+                        <td>{{ corp.corporation_ceo_id }}</td>
+                        <td>{{ corp.corporation_owner_id }}</td>
+                        <td class="centre_cb">
+                            {% if corp.is_alt_corp %}
+                                <input type="checkbox" onchange="unsetAltCorp({{ corp_id }})" checked>
+                            {% else %}
+                                <input type="checkbox" onchange="setAltCorp({{ corp_id }})">
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if corp.brave_tax_balance %}
+                                {{ "{:,} ISK".format(corp.brave_tax_balance) }}
+                            {% endif %}
                         </td>
                     </tr>
                 {% endif %}

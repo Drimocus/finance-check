@@ -70,8 +70,9 @@ class Tokens:
                         "active": None,
                         "is_alt_corp": None,
                         "want": True,
-                        "corporation_owner_id": None,
-                        "corporation_ceo_id": None,
+                        "corporation_owner_id": "",
+                        "corporation_ceo_id": "",
+                        "brave_tax_balance": "",
                     }
         # sort dict by corp name for readable webpage
         self.__corporations = dict(sorted(
@@ -93,6 +94,10 @@ class Tokens:
                 if token['corporationId'] == corp_id:
                     tokens.append(token)
             self.__corporations[corp_id]["tokens"] = tokens
+        
+        last_tax_records = self.__last_tax_records()
+        for tax_record in last_tax_records:
+            self.__corporations[tax_record["corporation_id"]]["brave_tax_balance"] = tax_record["brave_tax_balance"]
 
         return render_template(
             'tokens.html',
@@ -160,6 +165,14 @@ class Tokens:
 
         cursor.close()
         return redirect(url_for('tokens'))
+    
+    def __last_tax_records(self) -> list[dict]:
+        cursor = self.__db.cursor(dictionary=True)
+        sql = "select corporation_id, brave_tax_balance, tax_month_date FROM tax_records as data WHERE tax_month_date = (SELECT MAX(tax_month_date) FROM tax_records WHERE corporation_id = data.corporation_id);"
+        cursor.execute(sql)
+        results = cursor.fetchall()
+        cursor.close()
+        return results
 
     def __fetch_alliance_corporations(self) -> dict:
         # return {99003214: [98024275], 99010079: [98112599, 98209548]}
