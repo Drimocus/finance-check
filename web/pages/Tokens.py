@@ -71,6 +71,8 @@ class Tokens:
         )
 
     def add(self) -> Union[str, Response]:
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
         cursor = self.__db.cursor()
 
         sql = "INSERT INTO corporations " \
