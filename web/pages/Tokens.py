@@ -42,9 +42,10 @@ class Tokens:
         self.__want_corporations = self.__fetch_alliance_corporations()
         if self.__check_corporations:
             self.__want_corporations[0] = [int(x) for x in self.__check_corporations.split(',')]
+        alliance_ids = list(self.__want_corporations)
 
         all_want_corporation_ids = []
-        for alliance_id in self.__want_corporations.keys():
+        for alliance_id in alliance_ids:
             all_want_corporation_ids = all_want_corporation_ids + self.__want_corporations[alliance_id]
         self.__fetch_names(all_want_corporation_ids)
 
@@ -96,7 +97,7 @@ class Tokens:
         return render_template(
             'tokens.html',
             character_id=session['character_id'],
-            want_corporations=self.__want_corporations,
+            alliance_ids=alliance_ids,
             has_token=self.__has_token,
             corporations=self.__corporations
         )
