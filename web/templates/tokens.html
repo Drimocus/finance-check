@@ -27,7 +27,6 @@
                     <th colspan="3">CONFIGURED</th>
                     <th colspan="3">AVAILABLE (valid tokens only)</th>
                     <th>Match</th>
-                    <th>Action</th>
                 </tr>
                 <tr>
                     <td>ID</td>
@@ -42,7 +41,6 @@
                     <td>Last Checked</td>
 
                     <td title="CONFIGURED character ID matches one of the AVAILABLE IDs">*</td>
-                    <td></td>
                 </tr>
             </thead>
             <tbody>
@@ -80,29 +78,20 @@
                         <td>
                             {% for token in tokens %}
                                 {% if corporation.character_id == token.characterId %}
-                                    Yes<br>
-                                {% else %}
-                                    <br>
-                                {% endif %}
-                            {% endfor %}
-                        </td>
-                        <td>
-                            {% for token in tokens %}
-                                {% if corporation.character_id == token.characterId %}
                                     {% if not corporation.active %}
                                         <form method="post" action="/tokens/activate">
                                             <input type="hidden" name="corporation_id" value="{{ corporation_id }}">
                                             <input type="submit" value="activate" onclick="showWaitBlock()">
                                         </form>
                                     {% else %}
-                                        <br>
+                                        Active
                                     {% endif %}
                                 {% else %}
                                     <form method="post" action="/tokens/add">
                                         <input type="hidden" name="corporation_id" value="{{ corporation_id }}">
                                         <input type="hidden" name="corporation_name" value="{{ corporation_name }}">
                                         <input type="hidden" name="character_id" value="{{ token.characterId }}">
-                                        <input type="submit" value="Add" onclick="showWaitBlock()">
+                                        <input type="submit" value="Select" onclick="showWaitBlock()">
                                     </form>
                                 {% endif %}
                             {% endfor %}
