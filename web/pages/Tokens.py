@@ -56,7 +56,7 @@ class Tokens:
 
         # start with database corporations
         cursor = self.__db.cursor(dictionary=True)
-        cursor.execute("SELECT id, corporation_name, character_id, last_journal_date, active, alliance_id, is_alt_corp, corporation_ceo_id, corporation_owner_id FROM corporations")
+        cursor.execute("SELECT id, corporation_name, character_id, last_journal_date, active, alliance_id, is_alt_corp, is_taxed, corporation_ceo_id, corporation_owner_id FROM corporations")
         corporations = cursor.fetchall()
         cursor.close()
 
@@ -171,6 +171,20 @@ class Tokens:
 
         cursor.close()
         return redirect(url_for('tokens'))
+    def set_corp_attr(self) -> wzResponse:
+        corp_id = request.form.get('corporation_id')
+        attribute_name = request.form.get('attribute_name')
+        attribute_value = request.form.get('attribute_value')
+
+        cursor = self.__db.cursor()
+        sql = f"""
+            UPDATE corporations SET {attribute_name} = {attribute_value}
+            WHERE id = {corp_id}
+        """
+        cursor.execute(sql)
+        self.__db.commit()
+        cursor.close()
+        return redirect(url_for('tokens'))
 
     def __last_tax_records(self) -> list[dict]:
         cursor = self.__db.cursor(dictionary=True)
@@ -200,6 +214,7 @@ class Tokens:
                 "last_journal_date": None,
                 "active": 1,
                 "is_alt_corp": 0,
+                "is_taxed": 1,
                 "corporation_owner_id": None,
                 "corporation_ceo_id": None,
                 "brave_tax_balance": 0,
@@ -233,6 +248,22 @@ class Tokens:
                 if item['category'] == 'character':
                     corp_id = ceo_id_corp_lookup[item["id"]]
                     self.__corporations[corp_id]["corporation_ceo_name"] = item["name"]
+        else:
+            self.__app.logger.error(response.content)
+        
+        owner_id_corp_lookup = {}
+        for k,v in [(corp["corporation_owner_id"],corp["id"]) for corp in self.__corporations.values()]:
+            if k is not None:
+                owner_id_corp_lookup[k] = v
+        corporation_owner_ids = list(owner_id_corp_lookup)
+        url = '{}/universe/names/'.format(self.__esi_base_url)
+        response = requests.post(url, json=corporation_owner_ids)
+        # Note: corporation_ids cannot have more than 1000 items
+        if response.status_code == 200:
+            for item in response.json():
+                if item['category'] == 'character':
+                    corp_id = owner_id_corp_lookup[item["id"]]
+                    self.__corporations[corp_id]["corporation_owner_name"] = item["name"]
         else:
             self.__app.logger.error(response.content)
 

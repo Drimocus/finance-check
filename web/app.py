@@ -7,6 +7,7 @@ from pages.Auth import Auth
 from pages.Index import Index
 from pages.Tokens import Tokens
 
+from werkzeug.wrappers import Response as wzResponse
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
@@ -39,12 +40,13 @@ def tokens_activate() -> Union[str, Response]:
 @app.route('/tokens/set_alt_corp', methods=['POST'])
 def set_alt_corp() -> Union[str, Response]:
     return Tokens(app).set_alt_corp()
-
-
 @app.route('/tokens/unset_alt_corp', methods=['POST'])
 def unset_alt_corp() -> Union[str, Response]:
     return Tokens(app).unset_alt_corp()
 
+@app.route('/tokens/set_corp_attr', methods=['POST'])
+def set_corp_attr() -> wzResponse:
+    return Tokens(app).set_corp_attr()
 
 @app.route('/auth/login')
 def auth_login() -> str:

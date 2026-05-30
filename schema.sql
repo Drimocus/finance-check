@@ -66,3 +66,5 @@ CREATE TABLE tax_records
 
 -- 2026-05-29, add alliance if of corporation
 ALTER TABLE corporations ADD alliance_id BIGINT unsigned NOT NULL after id;
+-- 2026-05-30, add alliance if of corporation
+ALTER TABLE corporations ADD is_taxed BOOLEAN NULL DEFAULT 1 after is_alt_corp;
