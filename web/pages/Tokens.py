@@ -215,16 +215,24 @@ class Tokens:
             self.__app.logger.error(response.content)
 
     def __update_names(self) -> None:
-        # update names for all corps
+        # update names for corps and corp ceos
         corporation_ids = list(self.__corporations)
+        ceo_id_corp_lookup = {}
+        for k,v in [(corp["corporation_ceo_id"],corp["id"]) for corp in self.__corporations.values()]:
+            if k is not None:
+                ceo_id_corp_lookup[k] = v
+        corporation_ceo_ids = list(ceo_id_corp_lookup)
 
         url = '{}/universe/names/'.format(self.__esi_base_url)
-        response = requests.post(url, json=corporation_ids)
+        response = requests.post(url, json=corporation_ids+corporation_ceo_ids)
         # Note: corporation_ids cannot have more than 1000 items
         if response.status_code == 200:
             for item in response.json():
                 if item['category'] == 'corporation':
                     self.__corporations[item['id']]["corporation_name"] = item['name']
+                if item['category'] == 'character':
+                    corp_id = ceo_id_corp_lookup[item["id"]]
+                    self.__corporations[corp_id]["corporation_ceo_name"] = item["name"]
         else:
             self.__app.logger.error(response.content)
 
@@ -233,7 +241,6 @@ class Tokens:
         for corp_id, corp in self.__corporations.items():
             if not missing_only or corp["corporation_ceo_id"] is None:
                 url = f'{self.__esi_base_url}/corporations/{corp_id}'
-                self.__app.logger.error(url)
                 response = requests.get(url)
                 if response.status_code == 200:
                     corp_info = response.json()

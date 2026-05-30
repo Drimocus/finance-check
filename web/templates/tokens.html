@@ -7,7 +7,7 @@
     <dl>
         <dt>Tax Data fields:</dt>
         <dl>
-            <dt>CEO ID</dt><dd>Automatically updated through ESI, the CEO character always receives ingame tax report evemails.</dd>
+            <dt>CEO Name</dt><dd>Automatically updated through ESI, the CEO character always receives ingame tax report evemails.</dd>
             <dt>Owner ID</dt><dd>Optional main contact character in case it is different from the ingame CEO, like with alt or holding corps/characters. If set this character will also receive ingame tax report evemails.</dd>
         <dt>Alt Corp</dt><dd>Whether or not the corp is an alt corp for someone</dd>
         <dt>Tax Balance</dt>
@@ -52,7 +52,7 @@
                     <td>Last Checked</td>
                     <td title="CONFIGURED character ID matches one of the AVAILABLE IDs">Action</td>
 
-                    <td>CEO ID</td>
+                    <td>CEO Name</td>
                     <td>Owner ID</td>
                     <td>Alt Corp?</td>
                     <td>Tax Balance</td>
@@ -116,8 +116,13 @@
                                 {% endif %}
                             {% endfor %}
                         </td>
-                        <td>{{ corp.corporation_ceo_id }}</td>
-                        <td>{{ corp.corporation_owner_id }}</td>
+                        <td>
+                            <a href="https://evewho.com/character/{{ corp.corporation_ceo_id }}" target="_blank"
+                                   rel="noopener noreferrer" title="EveWho">{{ corp.corporation_ceo_name }}</a>
+                        </td>
+                        <td>
+                            <input type="number" value="{{ corp.corporation_owner_id }}" min="0" onchange="setOwnerId({{ corp_id }}, this.value)">
+                        </td>
                         <td class="centre_cb">
                             {% if corp.is_alt_corp %}
                                 <input type="checkbox" onchange="unsetAltCorp({{ corp_id }})" checked>
@@ -253,6 +258,20 @@
     function unsetAltCorp(corporation_id) {
         const formData = new FormData()
         formData.append("corporation_id", corporation_id);
+        showWaitBlock();
+        fetch(`/tokens/unset_alt_corp`, { 
+            method: 'POST', redirect: 'follow', body: formData, 
+        }).then(response => {
+            location.reload()
+            // could update page with javascript instead of reload
+            // would be much faster / smoother for user, dont need waitblock
+        });
+    }
+    function setOwnerId(corporation_id, corporation_owner_id) {
+        console.log(corporation_id, corporation_owner_id)
+        const formData = new FormData()
+        formData.append("corporation_id", corporation_id);
+        formData.append("corporation_owner_id", corporation_owner_id);
         showWaitBlock();
         fetch(`/tokens/unset_alt_corp`, { 
             method: 'POST', redirect: 'follow', body: formData, 
