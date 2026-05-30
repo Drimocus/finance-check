@@ -5,11 +5,13 @@
 <div class="tokens">
     <h3>Corporation Overview</h3>
     <dl>
-        <dt>Tax Data fields:</dt>
+        <dt>Tax Data columns:</dt>
         <dl>
-            <dt>CEO Name</dt><dd>Automatically updated through ESI, the CEO character always receives ingame tax report evemails.</dd>
-            <dt>Owner ID</dt><dd>Optional main contact character in case it is different from the ingame CEO, like with alt or holding corps/characters. If set this character will also receive ingame tax report evemails.</dd>
-        <dt>Alt Corp</dt><dd>Whether or not the corp is an alt corp for someone</dd>
+            <dt>CEO</dt><dd>Automatically updated through ESI, the CEO character always receives ingame tax report evemails.</dd>
+            <dt>Owner</dt><dd>Optional main contact character in case it is different from the ingame CEO, like with alt or holding corps/characters. If set this character will also receive ingame tax report evemails.</dd>
+            <dt>Edit Owner</dt><dd>Edit this to update optional owner of the corp, value should be a character name. Owner column will update if successful, check the result there.</dd>
+        <dt>Alt Corp</dt><dd>Whether or not the corp is an alt corp for someone, this affects which tax rules are applied. You can toggle the checkbox to update. [might change to a corp type selection in future if we need more options (main, alt, anti coup, hauler, holding, executor w/e)]</dd>
+        <dt>Taxed</dt><dd>Controls if tax is applied to the corporation. If enabled the corp gets tax balance updates and the ceo / owner receives ingame tax report evemails</dd>
         <dt>Tax Balance</dt>
             <dd>If negative: The total tax the corp still owes Brave</dd>
             <dd>If positive: The amount by which the corporation still has overpaid it's tax</dd>
@@ -37,7 +39,7 @@
                     <th colspan="2">WANT</th>
                     <th colspan="4">CONFIGURED</th>
                     <th colspan="3">AVAILABLE (valid tokens only)</th>
-                    <th colspan="4">TAX DATA</th>
+                    <th colspan="6">TAX DATA</th>
                 </tr>
                 <tr>
                     <td>ID</td>
@@ -52,9 +54,11 @@
                     <td>Last Checked</td>
                     <td title="CONFIGURED character ID matches one of the AVAILABLE IDs">Action</td>
 
-                    <td>CEO Name</td>
-                    <td>Owner ID</td>
+                    <td>CEO</td>
+                    <td>Owner</td>
+                    <td>Edit Owner</td>
                     <td>Alt Corp?</td>
+                    <td>Taxed?</td>
                     <td>Tax Balance</td>
                 </tr>
             </thead>
@@ -121,13 +125,24 @@
                                    rel="noopener noreferrer" title="EveWho">{{ corp.corporation_ceo_name }}</a>
                         </td>
                         <td>
-                            <input type="number" value="{{ corp.corporation_owner_id }}" min="0" onchange="setOwnerId({{ corp_id }}, this.value)">
+                            <a href="https://evewho.com/character/{{ corp.corporation_owner_id }}" target="_blank"
+                                   rel="noopener noreferrer" title="EveWho">{{ corp.corporation_owner_name }}</a>
+                        </td>
+                        <td>
+                            <input type="text" value="{{ corp.corporation_owner_name }}" min="0" onchange="setOwnerName({{ corp_id }}, this.value)">
                         </td>
                         <td class="centre_cb">
                             {% if corp.is_alt_corp %}
                                 <input type="checkbox" onchange="unsetAltCorp({{ corp_id }})" checked>
                             {% else %}
                                 <input type="checkbox" onchange="setAltCorp({{ corp_id }})">
+                            {% endif %}
+                        </td>
+                        <td class="centre_cb">
+                            {% if corp.is_taxed %}
+                                <input type="checkbox" onchange="setCorpAttr({{ corp_id }}, 'is_taxed', 0)" checked>
+                            {% else %}
+                                <input type="checkbox" onchange="setCorpAttr({{ corp_id }}, 'is_taxed', 1)">
                             {% endif %}
                         </td>
                         <td>
@@ -267,11 +282,25 @@
             // would be much faster / smoother for user, dont need waitblock
         });
     }
-    function setOwnerId(corporation_id, corporation_owner_id) {
-        console.log(corporation_id, corporation_owner_id)
+    function setCorpAttr(corporation_id, attribute_name, attribute_value) {
         const formData = new FormData()
         formData.append("corporation_id", corporation_id);
-        formData.append("corporation_owner_id", corporation_owner_id);
+        formData.append("attribute_name", attribute_name);
+        formData.append("attribute_value", attribute_value);
+        showWaitBlock();
+        fetch(`/tokens/set_corp_attr`, { 
+            method: 'POST', redirect: 'follow', body: formData, 
+        }).then(response => {
+            location.reload()
+            // could update page with javascript instead of reload
+            // would be much faster / smoother for user, dont need waitblock
+        });
+    }
+    function setOwnerId(corporation_id, corporation_owner_name) {
+        console.log(corporation_id, corporation_owner_name)
+        const formData = new FormData()
+        formData.append("corporation_id", corporation_id);
+        formData.append("corporation_owner_id", corporation_owner_name);
         showWaitBlock();
         fetch(`/tokens/unset_alt_corp`, { 
             method: 'POST', redirect: 'follow', body: formData, 

@@ -71,15 +71,6 @@ table.list td.centre_cb {
     text-align: center;
 }
 
-table.list td input[type=number] {
-    -moz-appearance: textfield;
-    width: 80px;
-}
-table.list td input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-}
-table.list td input::-webkit-outer-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
+table.list td input[type=text] {
+    width: 120px;
 }
