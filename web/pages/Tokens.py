@@ -126,52 +126,8 @@ class Tokens:
         cursor.close()
         return redirect(url_for('tokens'))
 
-    def deactivate(self) -> wzResponse:
-        """deactivate corp route"""
-        if 'character_id' not in session:
-            return redirect(url_for('auth_login'))
-        return self.__update_active(0)
-
-    def activate(self) -> wzResponse:
-        """activate corp route"""
-        if 'character_id' not in session:
-            return redirect(url_for('auth_login'))
-        return self.__update_active(1)
-
-    def __update_active(self, active: int) -> wzResponse:
-        cursor = self.__db.cursor()
-
-        sql = "UPDATE corporations SET active = %s WHERE id = %s"
-        data = [active, request.form.get('corporation_id')]
-        cursor.execute(sql, data)
-        self.__db.commit()
-
-        cursor.close()
-        return redirect(url_for('tokens'))
-
-    def unset_alt_corp(self) -> wzResponse:
-        """unset alt corp route"""
-        if 'character_id' not in session:
-            return redirect(url_for('auth_login'))
-        return self.__update_alt_corp(0)
-
-    def set_alt_corp(self) -> wzResponse:
-        """set alt corp route"""
-        if 'character_id' not in session:
-            return redirect(url_for('auth_login'))
-        return self.__update_alt_corp(1)
-
-    def __update_alt_corp(self, active: int) -> wzResponse:
-        cursor = self.__db.cursor()
-
-        sql = "UPDATE corporations SET is_alt_corp = %s WHERE id = %s"
-        data = [active, request.form.get('corporation_id')]
-        cursor.execute(sql, data)
-        self.__db.commit()
-
-        cursor.close()
-        return redirect(url_for('tokens'))
     def set_corp_attr(self) -> wzResponse:
+        """route to set a specific corp attribute to a new value"""
         corp_id = request.form.get('corporation_id')
         attribute_name = request.form.get('attribute_name')
         attribute_value = request.form.get('attribute_value')
@@ -222,8 +178,8 @@ class Tokens:
 
     def __fetch_alliance_corporations(self, alliance_id) -> None:
         # return {99003214: [98024275], 99010079: [98112599, 98209548]}
-        url = '{}/alliances/{alliance_id}/corporations/'.format(self.__esi_base_url, alliance_id=alliance_id)
-        response = requests.get(url)
+        url = f'{self.__esi_base_url}/alliances/{alliance_id}/corporations/'
+        response = requests.get(url, timeout=15)
         if response.status_code == 200:
             self.__add_new_corporations(response.json(), alliance_id)
         else:

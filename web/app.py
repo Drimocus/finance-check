@@ -27,23 +27,6 @@ def tokens() -> Union[str, Response]:
 def tokens_add() -> Union[str, Response]:
     return Tokens(app).add()
 
-
-@app.route('/tokens/deactivate', methods=['POST'])
-def tokens_deactivate() -> Union[str, Response]:
-    return Tokens(app).deactivate()
-
-
-@app.route('/tokens/activate', methods=['POST'])
-def tokens_activate() -> Union[str, Response]:
-    return Tokens(app).activate()
-
-@app.route('/tokens/set_alt_corp', methods=['POST'])
-def set_alt_corp() -> Union[str, Response]:
-    return Tokens(app).set_alt_corp()
-@app.route('/tokens/unset_alt_corp', methods=['POST'])
-def unset_alt_corp() -> Union[str, Response]:
-    return Tokens(app).unset_alt_corp()
-
 @app.route('/tokens/set_corp_attr', methods=['POST'])
 def set_corp_attr() -> wzResponse:
     return Tokens(app).set_corp_attr()

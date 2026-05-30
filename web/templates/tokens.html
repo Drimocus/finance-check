@@ -82,9 +82,9 @@
                         <td>{% if corp.last_journal_date %}{{ corp.last_journal_date }}{% endif %}</td>
                         <td class="centre_cb">
                             {% if corp.active %}
-                                <input type="checkbox" onchange="deactivate({{ corp_id }})" checked>
+                                <input type="checkbox" onchange="setCorpAttr({{ corp_id }}, 'active', 0)" checked>
                             {% elif corp.character_id %}
-                                <input type="checkbox" onchange="activate({{ corp_id }})">
+                                <input type="checkbox" onchange="setCorpAttr({{ corp_id }}, 'active', 1)">
                             {% endif %}
                         </td>
 
@@ -129,13 +129,13 @@
                                    rel="noopener noreferrer" title="EveWho">{{ corp.corporation_owner_name }}</a>
                         </td>
                         <td>
-                            <input type="text" value="{{ corp.corporation_owner_name }}" min="0" onchange="setOwnerName({{ corp_id }}, this.value)">
+                            <input type="text" value="{{ corp.corporation_owner_name }}" min="0" onchange="setCorpAttr({{ corp_id }}, 'corporation_owner_name', this.value)">
                         </td>
                         <td class="centre_cb">
                             {% if corp.is_alt_corp %}
-                                <input type="checkbox" onchange="unsetAltCorp({{ corp_id }})" checked>
+                                <input type="checkbox" onchange="setCorpAttr({{ corp_id }}, 'is_alt_corp', 0)" checked>
                             {% else %}
-                                <input type="checkbox" onchange="setAltCorp({{ corp_id }})">
+                                <input type="checkbox" onchange="setCorpAttr({{ corp_id }}, 'is_alt_corp', 1)">
                             {% endif %}
                         </td>
                         <td class="centre_cb">
@@ -234,54 +234,6 @@
 </div>
 
 <script type="text/javascript">
-    function activate(corporation_id) {
-        const formData = new FormData()
-        formData.append("corporation_id", corporation_id);
-        showWaitBlock();
-        fetch(`/tokens/activate`, { 
-            method: 'POST', redirect: 'follow', body: formData, 
-        }).then(response => {
-            location.reload()
-            // could update page with javascript instead of reload
-            // would be much faster / smoother for user, dont need waitblock
-        });
-    }
-    function deactivate(corporation_id) {
-        const formData = new FormData()
-        formData.append("corporation_id", corporation_id);
-        showWaitBlock();
-        fetch(`/tokens/deactivate`, { 
-            method: 'POST', redirect: 'follow', body: formData, 
-        }).then(response => {
-            location.reload()
-            // could update page with javascript instead of reload
-            // would be much faster / smoother for user, dont need waitblock
-        });
-    }
-    function setAltCorp(corporation_id) {
-        const formData = new FormData()
-        formData.append("corporation_id", corporation_id);
-        showWaitBlock();
-        fetch(`/tokens/set_alt_corp`, { 
-            method: 'POST', redirect: 'follow', body: formData, 
-        }).then(response => {
-            location.reload()
-            // could update page with javascript instead of reload
-            // would be much faster / smoother for user, dont need waitblock
-        });
-    }
-    function unsetAltCorp(corporation_id) {
-        const formData = new FormData()
-        formData.append("corporation_id", corporation_id);
-        showWaitBlock();
-        fetch(`/tokens/unset_alt_corp`, { 
-            method: 'POST', redirect: 'follow', body: formData, 
-        }).then(response => {
-            location.reload()
-            // could update page with javascript instead of reload
-            // would be much faster / smoother for user, dont need waitblock
-        });
-    }
     function setCorpAttr(corporation_id, attribute_name, attribute_value) {
         const formData = new FormData()
         formData.append("corporation_id", corporation_id);
@@ -289,20 +241,6 @@
         formData.append("attribute_value", attribute_value);
         showWaitBlock();
         fetch(`/tokens/set_corp_attr`, { 
-            method: 'POST', redirect: 'follow', body: formData, 
-        }).then(response => {
-            location.reload()
-            // could update page with javascript instead of reload
-            // would be much faster / smoother for user, dont need waitblock
-        });
-    }
-    function setOwnerId(corporation_id, corporation_owner_name) {
-        console.log(corporation_id, corporation_owner_name)
-        const formData = new FormData()
-        formData.append("corporation_id", corporation_id);
-        formData.append("corporation_owner_id", corporation_owner_name);
-        showWaitBlock();
-        fetch(`/tokens/unset_alt_corp`, { 
             method: 'POST', redirect: 'follow', body: formData, 
         }).then(response => {
             location.reload()
