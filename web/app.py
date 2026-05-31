@@ -22,11 +22,6 @@ def index() -> Union[str, Response]:
 def tokens() -> Union[str, Response]:
     return Tokens(app).show()
 
-
-@app.route('/tokens/add', methods=['POST'])
-def tokens_add() -> Union[str, Response]:
-    return Tokens(app).add()
-
 @app.route('/tokens/set_corp_attr', methods=['POST'])
 def set_corp_attr() -> wzResponse:
     return Tokens(app).set_corp_attr()

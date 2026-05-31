@@ -5,6 +5,10 @@
 <div class="tokens">
     <h3>Corporation Overview</h3>
     <dl>
+        <dt>Token columns:</dt>
+        <dt>Active</dt><dd>Controls wallet journal updates, if disabled the corporations wallets will not be tracked. Tax reports require wallet data, if disabled the corp will also stop receiving tax reports.</dd>
+    </dl>
+    <dl>
         <dt>Tax Data columns:</dt>
         <dl>
             <dt>CEO</dt><dd>Automatically updated through ESI, the CEO character always receives ingame tax report evemails.</dd>
@@ -103,21 +107,14 @@
                             {% for token in tokens %}
                                 {% if corp.character_id == token.characterId %}
                                     {% if not corp.active %}
-                                        <form method="post" action="/tokens/activate">
-                                            <input type="hidden" name="corporation_id" value="{{ corp_id }}">
-                                            <input type="submit" value="activate" onclick="showWaitBlock()">
-                                        </form>
+                                        <input type="submit" value="activate" onclick="setCorpAttr({{ corp_id}}, 'active', 1)">
                                     {% else %}
                                         Active
                                     {% endif %}
                                 {% else %}
-                                    <form method="post" action="/tokens/add">
-                                        <input type="hidden" name="corporation_id" value="{{ corp_id }}">
-                                        <input type="hidden" name="corporation_name" value="{{ corp.corporation_name }}">
-                                        <input type="hidden" name="character_id" value="{{ token.characterId }}">
-                                        <input type="submit" value="Select" onclick="showWaitBlock()">
-                                    </form>
+                                    <input type="submit" value="select" onclick="setCorpAttr({{ corp_id}}, 'character_id', {{ token.characterId }})">
                                 {% endif %}
+                                <br>
                             {% endfor %}
                         </td>
                         <td>

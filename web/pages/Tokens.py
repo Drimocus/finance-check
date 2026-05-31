@@ -103,35 +103,49 @@ class Tokens:
         return render_template(
             'tokens.html',
             character_id=session['character_id'],
-            alliance_ids=self.__check_alliance_ids,
+            alliance_ids=self.__check_alliance_ids + [0],
             has_token=self.__has_token,
             corporations=self.__corporations
         )
 
-    def add(self) -> wzResponse:
-        """add corp route"""
-        if 'character_id' not in session:
-            return redirect(url_for('auth_login'))
-        cursor = self.__db.cursor()
-
-        sql = "INSERT INTO corporations " \
-              "(id, corporation_name, character_id, active) " \
-              "VALUES (%s, %s, %s, 1) " \
-              "ON DUPLICATE KEY UPDATE character_id = %s, active = 1"
-        data = [request.form.get('corporation_id'), request.form.get('corporation_name'),
-                request.form.get('character_id'), request.form.get('character_id')]
-        cursor.execute(sql, data)
-        self.__db.commit()
-
-        cursor.close()
-        return redirect(url_for('tokens'))
-
-    def set_corp_attr(self) -> wzResponse:
+    def set_corp_attr(
+        self,
+    ) -> wzResponse:
         """route to set a specific corp attribute to a new value"""
         corp_id = request.form.get('corporation_id')
         attribute_name = request.form.get('attribute_name')
         attribute_value = request.form.get('attribute_value')
+        self.__set_corp_attr(corp_id, attribute_name, attribute_value)
 
+        # triggers related change
+        if attribute_name == 'active' and attribute_value == '0':
+            self.__set_corp_attr(corp_id, 'is_taxed', 0)
+        if attribute_name == 'corporation_owner_name':
+            owner_id = self.__get_character_id(attribute_value)
+            self.__set_corp_attr(corp_id, 'corporation_owner_id', owner_id)
+
+        return redirect(url_for('tokens'))
+    def __set_corp_attr(
+        self,
+        corp_id,
+        attribute_name,
+        attribute_value
+    ) -> None:
+        try:
+            corp_id = int(corp_id)
+        except ValueError as e:
+            self.__app.logger.error(e)
+        # update local data
+        self.__corporations[corp_id][attribute_name] = attribute_value
+
+        # skip fields that are local data only
+        if attribute_name in [
+            "corporation_owner_name",
+            "corporation_ceo_name"
+        ]:
+            return
+
+        # update db data
         cursor = self.__db.cursor()
         sql = f"""
             UPDATE corporations SET {attribute_name} = {attribute_value}
@@ -140,7 +154,6 @@ class Tokens:
         cursor.execute(sql)
         self.__db.commit()
         cursor.close()
-        return redirect(url_for('tokens'))
 
     def __last_tax_records(self) -> list[dict]:
         cursor = self.__db.cursor(dictionary=True)
@@ -189,14 +202,15 @@ class Tokens:
         # update names for corps and corp ceos
         corporation_ids = list(self.__corporations)
         ceo_id_corp_lookup = {}
-        for k,v in [(corp["corporation_ceo_id"],corp["id"]) for corp in self.__corporations.values()]:
-            if k is not None:
-                ceo_id_corp_lookup[k] = v
+        for k,v in [(corp["corporation_ceo_id"],corp["id"]) for corp in self.__corporations.values() if corp["corporation_ceo_id"] is not None]:
+            ceo_id_corp_lookup[k] = v
         corporation_ceo_ids = list(ceo_id_corp_lookup)
 
-        url = '{}/universe/names/'.format(self.__esi_base_url)
-        response = requests.post(url, json=corporation_ids+corporation_ceo_ids)
-        # Note: corporation_ids cannot have more than 1000 items
+        response = requests.post(
+            url=f'{self.__esi_base_url}/universe/names/',
+            json=corporation_ids+corporation_ceo_ids,
+            timeout=15
+        )
         if response.status_code == 200:
             for item in response.json():
                 if item['category'] == 'corporation':
@@ -206,22 +220,23 @@ class Tokens:
                     self.__corporations[corp_id]["corporation_ceo_name"] = item["name"]
         else:
             self.__app.logger.error(response.content)
-        
-        owner_id_corp_lookup = {}
-        for k,v in [(corp["corporation_owner_id"],corp["id"]) for corp in self.__corporations.values()]:
-            if k is not None:
-                owner_id_corp_lookup[k] = v
-        corporation_owner_ids = list(owner_id_corp_lookup)
-        url = '{}/universe/names/'.format(self.__esi_base_url)
-        response = requests.post(url, json=corporation_owner_ids)
-        # Note: corporation_ids cannot have more than 1000 items
+
+        # slightly different because owner is not guaranteed unique (ceo was)
+        owner_names = {}
+        for corp in self.__corporations.values():
+            if corp["corporation_owner_id"] is not None:
+                owner_names[corp["corporation_owner_id"]] = None
+        url = f'{self.__esi_base_url}/universe/names'
+        response = requests.post(url, json=list(owner_names), timeout=15)
         if response.status_code == 200:
             for item in response.json():
                 if item['category'] == 'character':
-                    corp_id = owner_id_corp_lookup[item["id"]]
-                    self.__corporations[corp_id]["corporation_owner_name"] = item["name"]
+                    owner_names[item["id"]] = item["name"]
         else:
             self.__app.logger.error(response.content)
+        for corp in self.__corporations.values():
+            if corp["corporation_owner_id"] is not None:
+                corp["corporation_owner_name"] = owner_names[corp["corporation_owner_id"]]
 
     def __update_ceos(self, missing_only=True, limit=10) -> None:
         """limit to 10 for test because it is slow / rate limit sketchy"""
@@ -240,6 +255,17 @@ class Tokens:
             limit -= 1
             if limit < 1:
                 return
+
+    def __get_character_id(self, character_name):
+        url = f'{self.__esi_base_url}/universe/ids'
+        response = requests.post(url, json=[character_name], timeout=15)
+        if response.status_code == 200:
+            character_ids = response.json().get("characters", [])
+        else:
+            self.__app.logger.error(response.content)
+            character_ids = []
+        for res in character_ids:
+            return res["id"]
 
     def __has_token(self, corporation_id: int, character_id: int) -> bool:
         for token in self.__corporations[corporation_id]["tokens"]:
