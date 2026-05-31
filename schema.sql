@@ -64,7 +64,9 @@ CREATE TABLE tax_records
     PRIMARY KEY (corporation_id, tax_month_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 2026-05-29, add alliance if of corporation
+-- 2026-05-29, add alliance of corporation
 ALTER TABLE corporations ADD alliance_id BIGINT unsigned NOT NULL after id;
--- 2026-05-30, add alliance if of corporation
+-- 2026-05-30, add tax toggle for corporation
 ALTER TABLE corporations ADD is_taxed BOOLEAN NULL DEFAULT 1 after is_alt_corp;
+-- corp without key can be fine if inactive or not yet configured
+ALTER TABLE corporations MODIFY character_id int NULL;
