@@ -14,12 +14,16 @@ class FetchWallet:
         self.__login_name = os.getenv('API_EVE_LOGIN')
         self.__db = mysql.connector.connect(
             host=os.getenv('DB_HOST'),
-            port=os.getenv('DB_PORT', 3306),
+            port=os.getenv('DB_PORT', '3306'),
             user=os.getenv('DB_USER'),
             password=os.getenv('DB_PASSWORD'),
             database=os.getenv('DB_DATABASE'),
         )
-        self.__all_types_corporations = [int(x) for x in os.getenv('ALL_TYPES_CORPORATIONS').split(',')]
+        all_type_corps = os.getenv('ALL_TYPES_CORPORATIONS')
+        if all_type_corps is not None:
+            self.__all_types_corporations = [int(x) for x in all_type_corps.split(',')]
+        else:
+            self.__all_types_corporations = []
 
     def run(self):
         self.__read_wallets()
@@ -27,7 +31,13 @@ class FetchWallet:
 
     def __read_wallets(self) -> None:
         cursor = self.__db.cursor()
-        cursor.execute("SELECT id, character_id, last_journal_date FROM corporations WHERE active = 1")
+        cursor.execute(
+            """
+                SELECT id, character_id, last_journal_date
+                FROM corporations
+                WHERE active = 1 AND character_id IS NOT NULL;
+            """
+        )
         corporation_data = cursor.fetchall()
         cursor.close()
 
