@@ -73,6 +73,10 @@ class Tokens:
         # update ceo's and names
         self.__update_ceos()
         self.__update_names()
+        self.__update_owner_names()
+
+        # update database with new corp info
+        self.__update_corporations_table()
 
         # sort dict by corp name for readable webpage
         self.__corporations = dict(sorted(
@@ -82,7 +86,7 @@ class Tokens:
 
         # add token info
         url = f'{self.__core_base_url}/v1/esi/eve-login/{self.__login_name}/token-data'
-        response = requests.get(url, headers=self.__auth_header)
+        response = requests.get(url, headers=self.__auth_header, timeout=15)
         if response.status_code == 200:
             self.__available_tokens = response.json()
         else:
@@ -97,7 +101,9 @@ class Tokens:
         # add tax balance
         last_tax_records = self.__last_tax_records()
         for tax_record in last_tax_records:
-            self.__corporations[tax_record["corporation_id"]]["brave_tax_balance"] = tax_record["brave_tax_balance"]
+            self.__corporations[
+                tax_record["corporation_id"]
+            ]["brave_tax_balance"] = tax_record["brave_tax_balance"]
 
         # render page
         return render_template(
@@ -157,7 +163,15 @@ class Tokens:
 
     def __last_tax_records(self) -> list[dict]:
         cursor = self.__db.cursor(dictionary=True)
-        sql = "select corporation_id, brave_tax_balance, tax_month_date FROM tax_records as data WHERE tax_month_date = (SELECT MAX(tax_month_date) FROM tax_records WHERE corporation_id = data.corporation_id);"
+        sql = """
+            SELECT corporation_id, brave_tax_balance, tax_month_date
+            FROM tax_records as data 
+            WHERE tax_month_date = (
+                SELECT MAX(tax_month_date)
+                FROM tax_records
+                WHERE corporation_id = data.corporation_id
+            );
+        """
         cursor.execute(sql)
         results = cursor.fetchall()
         cursor.close()
@@ -202,13 +216,16 @@ class Tokens:
         # update names for corps and corp ceos
         corporation_ids = list(self.__corporations)
         ceo_id_corp_lookup = {}
-        for k,v in [(corp["corporation_ceo_id"],corp["id"]) for corp in self.__corporations.values() if corp["corporation_ceo_id"] is not None]:
+        for k,v in [
+            (corp["corporation_ceo_id"],corp["id"])
+            for corp in self.__corporations.values()
+            if corp["corporation_ceo_id"] is not None
+        ]:
             ceo_id_corp_lookup[k] = v
-        corporation_ceo_ids = list(ceo_id_corp_lookup)
 
         response = requests.post(
             url=f'{self.__esi_base_url}/universe/names/',
-            json=corporation_ids+corporation_ceo_ids,
+            json=corporation_ids+list(ceo_id_corp_lookup),
             timeout=15
         )
         if response.status_code == 200:
@@ -221,6 +238,7 @@ class Tokens:
         else:
             self.__app.logger.error(response.content)
 
+    def __update_owner_names(self):
         # slightly different because owner is not guaranteed unique (ceo was)
         owner_names = {}
         for corp in self.__corporations.values():
@@ -243,7 +261,7 @@ class Tokens:
         for corp_id, corp in self.__corporations.items():
             if not missing_only or corp["corporation_ceo_id"] is None:
                 url = f'{self.__esi_base_url}/corporations/{corp_id}'
-                response = requests.get(url)
+                response = requests.get(url, timeout=15)
                 if response.status_code == 200:
                     corp_info = response.json()
                     corp["corporation_ceo_id"] = corp_info["ceo_id"]
@@ -255,6 +273,47 @@ class Tokens:
             limit -= 1
             if limit < 1:
                 return
+
+    def __update_corporations_table(self):
+        """
+            Updates the corporations table with the version in memory. 
+
+            Effectively this only adds new corps from the check_ env vars, 
+            the database table should already match for existing entry.
+            But the insert .. update makes this more error proof and 
+            potentially re-usable for corp checks in the future
+        """
+        corporations_columns = [
+            "id",
+            "alliance_id",
+            "is_alt_corp",
+            "is_taxed",
+            "corporation_name",
+            "corporation_owner_id",
+            "corporation_ceo_id",
+            "character_id",
+            "last_journal_date",
+            "active"
+        ]
+        corp_data = []
+        for corp in self.__corporations.values():
+            corp_data.append([corp[column] for column in corporations_columns])
+        update = ", ".join(
+            [
+                f"{col_name} = VALUES({col_name})"
+                for col_name in corporations_columns[1:]
+            ]
+        )
+
+        cursor = self.__db.cursor()
+        sql = f"""
+            INSERT INTO corporations ({", ".join(corporations_columns)})
+            VALUES ({"%s, "* (len(corporations_columns)-1) + "%s"})
+            ON DUPLICATE KEY UPDATE {update};
+        """
+        cursor.executemany(sql, corp_data)
+        self.__db.commit()
+        cursor.close()
 
     def __get_character_id(self, character_name):
         url = f'{self.__esi_base_url}/universe/ids'
