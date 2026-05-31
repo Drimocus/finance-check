@@ -26,6 +26,10 @@ def tokens() -> Union[str, Response]:
 def set_corp_attr() -> wzResponse:
     return Tokens(app).set_corp_attr()
 
+@app.route('/tokens/update_ceos', methods=['POST'])
+def update_ceos() -> wzResponse:
+    return Tokens(app).update_ceos()
+
 @app.route('/auth/login')
 def auth_login() -> str:
     return Auth.login()

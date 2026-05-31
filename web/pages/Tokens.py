@@ -56,7 +56,7 @@ class Tokens:
 
         # start with database corporations
         cursor = self.__db.cursor(dictionary=True)
-        cursor.execute("SELECT id, corporation_name, character_id, last_journal_date, active, alliance_id, is_alt_corp, is_taxed, corporation_ceo_id, corporation_owner_id FROM corporations")
+        cursor.execute("SELECT * FROM corporations;")
         corporations = cursor.fetchall()
         cursor.close()
 
@@ -80,7 +80,7 @@ class Tokens:
 
         # sort dict by corp name for readable webpage
         self.__corporations = dict(sorted(
-            self.__corporations.items(), 
+            self.__corporations.items(),
             key=lambda item: item[1]["corporation_name"]
         ))
 
@@ -256,6 +256,12 @@ class Tokens:
             if corp["corporation_owner_id"] is not None:
                 corp["corporation_owner_name"] = owner_names[corp["corporation_owner_id"]]
 
+    def update_ceos(self) -> wzResponse:
+        """Route for updating all CEOs, can take a while"""
+        self.__update_ceos(missing_only=False, limit=None)
+        self.__update_corporations_table()
+        return redirect(url_for('tokens'))
+
     def __update_ceos(self, missing_only=True, limit=10) -> None:
         """limit to 10 for test because it is slow / rate limit sketchy"""
         for corp_id, corp in self.__corporations.items():
@@ -270,9 +276,10 @@ class Tokens:
                     corp["alliance_id"] = corp_info.get("alliance_id", 0)
                 else:
                     self.__app.logger.error(response.content)
-            limit -= 1
-            if limit < 1:
-                return
+            if limit is not None:
+                limit -= 1
+                if limit < 1:
+                    return
 
     def __update_corporations_table(self):
         """

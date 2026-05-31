@@ -11,7 +11,9 @@
     <dl>
         <dt>Tax Data columns:</dt>
         <dl>
-            <dt>CEO</dt><dd>Automatically updated through ESI, the CEO character always receives ingame tax report evemails.</dd>
+            <dt>CEO</dt>
+                <dd>Automatically updated through ESI for new corporations, the CEO character always receives ingame tax report evemails.</dd>
+                <dd>You can update all CEOs here, but this may take a minute: <span id="ceo_status"><input type="submit" value="Update All CEOs" onclick=updateCEOS()></span></dd>
             <dt>Owner</dt><dd>Optional main contact character in case it is different from the ingame CEO, like with alt or holding corps/characters. If set this character will also receive ingame tax report evemails.</dd>
             <dt>Edit Owner</dt><dd>Edit this to update optional owner of the corp, value should be a character name. Owner column will update if successful, check the result there.</dd>
         <dt>Alt Corp</dt><dd>Whether or not the corp is an alt corp for someone, this affects which tax rules are applied. You can toggle the checkbox to update. [might change to a corp type selection in future if we need more options (main, alt, anti coup, hauler, holding, executor w/e)]</dd>
@@ -232,7 +234,7 @@
 
 <script type="text/javascript">
     function setCorpAttr(corporation_id, attribute_name, attribute_value) {
-        const formData = new FormData()
+        const formData = new FormData();
         formData.append("corporation_id", corporation_id);
         formData.append("attribute_name", attribute_name);
         formData.append("attribute_value", attribute_value);
@@ -240,7 +242,22 @@
         fetch(`/tokens/set_corp_attr`, { 
             method: 'POST', redirect: 'follow', body: formData, 
         }).then(response => {
-            location.reload()
+            location.reload();
+            // could update page with javascript instead of reload
+            // would be much faster / smoother for user, dont need waitblock
+        });
+    }
+
+    function updateCEOS() {
+        const formData = new FormData();
+        start = new Date();
+        ceo_status_span = document.getElementById("ceo_status");
+        ceo_status_span.innerHTML = "Updating...";
+        fetch(`/tokens/update_ceos`, { 
+            method: 'POST', redirect: "follow", body: formData, 
+        }).then(response => {
+            took = (new Date()) - start;
+            ceo_status_span.innerHTML = '<input type="submit" value="Update All CEOs" onclick=updateCEOS()> Finished (' + Math.round(took/1000) + 's), reload page to see results.';
             // could update page with javascript instead of reload
             // would be much faster / smoother for user, dont need waitblock
         });
