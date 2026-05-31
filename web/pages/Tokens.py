@@ -6,6 +6,7 @@ import os
 
 import mysql.connector
 import requests
+from typing import Union
 from flask import render_template, url_for, session, Flask, request
 from werkzeug.utils import redirect
 from werkzeug.wrappers import Response as wzResponse
@@ -49,7 +50,7 @@ class Tokens:
             database=os.getenv('DB_DATABASE'),
         )
 
-    def show(self) -> str:
+    def show(self) -> Union[str,wzResponse]:
         """Tokens page"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
@@ -195,7 +196,7 @@ class Tokens:
                 "want": True,
                 "character_id": None,
                 "last_journal_date": None,
-                "active": 1,
+                "active": 0,
                 "is_alt_corp": 0,
                 "is_taxed": 1,
                 "corporation_owner_id": None,

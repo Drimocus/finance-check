@@ -19,7 +19,7 @@ def index() -> Union[str, Response]:
 
 
 @app.route('/tokens')
-def tokens() -> Union[str, Response]:
+def tokens() -> Union[str, wzResponse]:
     return Tokens(app).show()
 
 @app.route('/tokens/set_corp_attr', methods=['POST'])
