@@ -11,6 +11,7 @@ from flask import render_template, url_for, session, Flask, request
 from werkzeug.utils import redirect
 from werkzeug.wrappers import Response as wzResponse
 
+from wallets import Wallets
 class Tokens:
     """Tokens page and routes
     
@@ -339,3 +340,8 @@ class Tokens:
             if token['characterId'] == character_id:
                 return True
         return False
+
+    def update_wallets(self) -> wzResponse:
+        """update database wallet_journals"""
+        Wallets().run()
+        return redirect(url_for('tokens'))

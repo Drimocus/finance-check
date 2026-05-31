@@ -30,6 +30,10 @@ def set_corp_attr() -> wzResponse:
 def update_ceos() -> wzResponse:
     return Tokens(app).update_ceos()
 
+@app.route('/tokens/update_wallets', methods=['POST'])
+def update_wallets() -> wzResponse:
+    return Tokens(app).update_wallets()
+
 @app.route('/auth/login')
 def auth_login() -> str:
     return Auth.login()

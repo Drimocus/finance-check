@@ -6,6 +6,8 @@
     <h3>Corporation Overview</h3>
     <dl>
         <dt>Token columns:</dt>
+        <dt>Last Journal</dt><dd>The last time the wallet data for this corporation was successfully updated. Wallet data can only be updated with a configured, still valid, active key. </dd>
+        <dd>You can force a wallet data update here, This may take several minutes: <span id="wallet_status"><input type="submit" value="Update All Corp Wallets" onclick=updateWallets()></span></dd>
         <dt>Active</dt><dd>Controls wallet journal updates, if disabled the corporations wallets will not be tracked. Tax reports require wallet data, if disabled the corp will also stop receiving tax reports.</dd>
     </dl>
     <dl>
@@ -28,7 +30,7 @@
         {% for alliance_id in alliance_ids %}
             <thead>
                 <tr>
-                    <th colspan="13">
+                    <th colspan="14">
                         {% if loop.index > 1 %}<br>{% endif %}
                         <h4>
                             {% if alliance_id %}
@@ -43,7 +45,7 @@
                 </tr>
                 <tr>
                     <th colspan="2">WANT</th>
-                    <th colspan="4">CONFIGURED</th>
+                    <th colspan="3">CONFIGURED</th>
                     <th colspan="3">AVAILABLE (valid tokens only)</th>
                     <th colspan="6">TAX DATA</th>
                 </tr>
@@ -56,9 +58,8 @@
                     <td>Active</td>
 
                     <td>Character ID</td>
-                    <td>Character Name</td>
                     <td>Last Checked</td>
-                    <td title="CONFIGURED character ID matches one of the AVAILABLE IDs">Action</td>
+                    <td>Action</td>
 
                     <td>CEO</td>
                     <td>Owner</td>
@@ -94,8 +95,12 @@
                             {% endif %}
                         </td>
 
-                        <td>{% for token in tokens %}{{ token.characterId }}<br>{% endfor %}</td>
-                        <td>{% for token in tokens %}{{ token.characterName }}<br>{% endfor %}</td>
+                        <td>
+                            {% for token in tokens %}
+                                <a href="https://evewho.com/character/{{ corp.character_id }}" target="_blank"
+                                   rel="noopener noreferrer" title="EveWho">{{ token.characterId }}</a><br>
+                            {% endfor %}
+                        </td>
                         <td>
                             {% for token in tokens %}
                                 {% if token.lastChecked %}
@@ -248,6 +253,21 @@
         });
     }
 
+    function updateWallets() {
+        const formData = new FormData();
+        start = new Date();
+        ceo_status_span = document.getElementById("wallet_status");
+        ceo_status_span.innerHTML = "Updating...";
+        fetch(`/tokens/update_wallets`, { 
+            method: 'POST', redirect: "follow", body: formData, 
+        }).then(response => {
+            took = (new Date()) - start;
+            ceo_status_span.innerHTML = '<input type="submit" value="Update All CEOs" onclick=updateCEOS()> Finished (' + Math.round(took/1000) + 's), reload page to see results.';
+            // could update page with javascript instead of reload
+            // location.reload();
+        });
+    }
+
     function updateCEOS() {
         const formData = new FormData();
         start = new Date();
@@ -259,7 +279,7 @@
             took = (new Date()) - start;
             ceo_status_span.innerHTML = '<input type="submit" value="Update All CEOs" onclick=updateCEOS()> Finished (' + Math.round(took/1000) + 's), reload page to see results.';
             // could update page with javascript instead of reload
-            // would be much faster / smoother for user, dont need waitblock
+            // location.reload();
         });
     }
 </script>
