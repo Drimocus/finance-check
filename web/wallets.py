@@ -12,6 +12,7 @@ class Wallets:
         self.__base_url = os.getenv('API_BASE_URL') + '/api/app/v2/esi/latest'
         self.__auth_header = {'Authorization': 'Bearer ' + os.getenv('API_KEY')}
         self.__login_name = os.getenv('API_EVE_LOGIN')
+        self.logger = Logger('Wallets')
         self.__db = mysql.connector.connect(
             host=os.getenv('DB_HOST'),
             port=os.getenv('DB_PORT', '3306'),
@@ -45,7 +46,6 @@ class Wallets:
 
         for data in corporation_data:
             corporation_id = data[0]
-            print('Read corporation {} wallet:'.format(corporation_id))
             for division in range(1, num_divisions + 1):
                 div_journal_date = self.__read_wallet(
                     corporation_id = corporation_id, 
@@ -54,18 +54,18 @@ class Wallets:
                     division=division
                 )
                 if div_journal_date is None:
-                    print(f'    Division {division}: incomplete journal.')
+                    self.logger.warning(f'    Division {division}: incomplete journal.')
                 # preserve journal date logic for division 1
                 if division == 1:
                     last_journal_date = div_journal_date
             if last_journal_date:
-                print('    Success.')
+                self.logger.info(f'Read corporation {corporation_id} wallet: Success.')
                 cursor = self.__db.cursor()
                 cursor.execute("UPDATE corporations SET last_journal_date = %s WHERE id = %s",
                                [last_journal_date, corporation_id])
                 self.__db.commit()
             else:
-                print('    Failed to read complete journal.')
+                self.logger.info(f'Read corporation {corporation_id} wallet: Failed to read complete journal.')
 
     def __read_wallet(self, corporation_id: int, character_id: int, previous_journal_date: str, division: int = 1, page: int = 1,
                       retry: int = 0) -> Optional[str]:
@@ -74,7 +74,7 @@ class Wallets:
         30 days back, 3600 seconds (1h) cache
         """
 
-        print('    {} page {} ... '.format(division, page))
+        self.logger.info('    {} page {} ... '.format(division, page))
 
         request_time = datetime.datetime.now()
 
@@ -82,10 +82,10 @@ class Wallets:
             self.__base_url, corporation_id, division, page, character_id, self.__login_name)
         r = requests.get(url, headers=self.__auth_header)
         if r.status_code != 200:
-            print('Request error: URL: {}: Status Code: {}, Reason: {}, Body: {}'
+            self.logger.error('Request error: URL: {}: Status Code: {}, Reason: {}, Body: {}'
                   .format(url, r.status_code, r.reason, r.text))
             if r.status_code != 403 and retry < 2:
-                print('retrying ({}) ...'.format(retry + 1))
+                self.logger.error('retrying ({}) ...'.format(retry + 1))
                 return self.__read_wallet(corporation_id, character_id, previous_journal_date, division, page, retry + 1)
             return None
         pages = int(r.headers['X-Pages'])
