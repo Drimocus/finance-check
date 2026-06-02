@@ -6,25 +6,46 @@ import mysql.connector
 import requests
 from logging import Logger
 
+env_vars = {
+    'DB_HOST' : os.getenv('DB_HOST'),
+    'DB_PORT' : os.getenv('DB_PORT', '3306'),
+    'DB_USER' : os.getenv('DB_USER'),
+    'DB_PASSWORD' : os.getenv('DB_PASSWORD'),
+    'DB_DATABASE' : os.getenv('DB_DATABASE'),
+
+    'NEUCORE_BASE_URL' : os.getenv('API_BASE_URL'),
+    'FINANCE_NEUCORE_KEY' : os.getenv('API_KEY'),
+    'FINANCE_EVE_LOGIN' : os.getenv('API_EVE_LOGIN'),
+
+    'ALL_TYPES_CORPORATIONS' : os.getenv('ALL_TYPES_CORPORATIONS')
+}
+
 class Wallets:
 
     def __init__(self):
-        self.__base_url = os.getenv('API_BASE_URL') + '/api/app/v2/esi/latest'
-        self.__auth_header = {'Authorization': 'Bearer ' + os.getenv('API_KEY')}
-        self.__login_name = os.getenv('API_EVE_LOGIN')
         self.logger = Logger('Wallets')
+        self.__auth_header = {'Authorization': 'Bearer ' + env_vars['FINANCE_NEUCORE_KEY']}
+
+        self.__check_env_vars()
+
         self.__db = mysql.connector.connect(
-            host=os.getenv('DB_HOST'),
-            port=os.getenv('DB_PORT', '3306'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_DATABASE'),
+            host=env_vars['DB_HOST'],
+            port=env_vars['DB_PORT'],
+            user=env_vars['DB_USER'],
+            password=env_vars['DB_PASSWORD'],
+            database=env_vars['DB_DATABASE'],
         )
-        all_type_corps = os.getenv('ALL_TYPES_CORPORATIONS')
-        if all_type_corps is not None:
-            self.__all_types_corporations = [int(x) for x in all_type_corps.split(',')]
+
+    def __check_env_vars(self):
+        env_vars['NEUCORE_V2_BASE_URL'] = env_vars['NEUCORE_BASE_URL'] + '/api/app/v2/esi/latest'
+        if (env_vars['ALL_TYPES_CORPORATIONS'] is not None and
+            env_vars['ALL_TYPES_CORPORATIONS'] != ''
+        ):
+            env_vars['ALL_TYPES_CORPORATION_IDS'] = [
+                int(x) for x in env_vars['ALL_TYPES_CORPORATIONS'].split(',')
+            ]
         else:
-            self.__all_types_corporations = []
+            env_vars['ALL_TYPES_CORPORATION_IDS'] = []
 
     def run(self):
         self.__read_wallets()
@@ -48,24 +69,24 @@ class Wallets:
             corporation_id = data[0]
             for division in range(1, num_divisions + 1):
                 div_journal_date = self.__read_wallet(
-                    corporation_id = corporation_id, 
-                    character_id=data[1], 
-                    previous_journal_date=str(data[2] or ''), 
+                    corporation_id = corporation_id,
+                    character_id=data[1],
+                    previous_journal_date=str(data[2] or ''),
                     division=division
                 )
                 if div_journal_date is None:
-                    self.logger.warning(f'    Division {division}: incomplete journal.')
+                    self.logger.warning('    Division %s: incomplete journal.', division)
                 # preserve journal date logic for division 1
                 if division == 1:
                     last_journal_date = div_journal_date
             if last_journal_date:
-                self.logger.info(f'Read corporation {corporation_id} wallet: Success.')
+                self.logger.info('Read corporation %s wallet: Success.', corporation_id)
                 cursor = self.__db.cursor()
                 cursor.execute("UPDATE corporations SET last_journal_date = %s WHERE id = %s",
                                [last_journal_date, corporation_id])
                 self.__db.commit()
             else:
-                self.logger.info(f'Read corporation {corporation_id} wallet: Failed to read complete journal.')
+                self.logger.info('Read corporation %s wallet: Failed to read complete journal.', corporation_id)
 
     def __read_wallet(self, corporation_id: int, character_id: int, previous_journal_date: str, division: int = 1, page: int = 1,
                       retry: int = 0) -> Optional[str]:
@@ -74,19 +95,31 @@ class Wallets:
         30 days back, 3600 seconds (1h) cache
         """
 
-        self.logger.info('    {} page {} ... '.format(division, page))
+        self.logger.info('    %s page %s ... ', division, page)
 
         request_time = datetime.datetime.now()
 
-        url = '{}/corporations/{}/wallets/{}/journal/?page={}&datasource={}:{}'.format(
-            self.__base_url, corporation_id, division, page, character_id, self.__login_name)
-        r = requests.get(url, headers=self.__auth_header)
+        url = (
+            f'{env_vars['NEUCORE_V2_BASE_URL']}/corporations/{corporation_id}/'
+            f'wallets/{division}/journal/?page={page}'
+            f'&datasource={character_id}:{env_vars['FINANCE_EVE_LOGIN']}'
+        )
+        r = requests.get(url, headers=self.__auth_header, timeout=15)
         if r.status_code != 200:
-            self.logger.error('Request error: URL: {}: Status Code: {}, Reason: {}, Body: {}'
-                  .format(url, r.status_code, r.reason, r.text))
+            self.logger.error(
+                'Request error: URL: %s: Status Code: %s, Reason: %s, Body: %s',
+                url, r.status_code, r.reason, r.text
+            )
             if r.status_code != 403 and retry < 2:
-                self.logger.error('retrying ({}) ...'.format(retry + 1))
-                return self.__read_wallet(corporation_id, character_id, previous_journal_date, division, page, retry + 1)
+                self.logger.error('retrying (%s) ...', retry + 1)
+                return self.__read_wallet(
+                    corporation_id,
+                    character_id,
+                    previous_journal_date,
+                    division,
+                    page,
+                    retry + 1
+                )
             return None
         pages = int(r.headers['X-Pages'])
         json = r.json()
@@ -96,7 +129,7 @@ class Wallets:
         last_journal_date = ''
         for entry in json:
             # see also https://github.com/esi/eve-glue/blob/master/eve_glue/wallet_journal_ref.py
-            if corporation_id not in self.__all_types_corporations and \
+            if corporation_id not in env_vars['ALL_TYPES_CORPORATION_IDS'] and \
                entry['ref_type'] not in [
                     # tax income
                     'bounty_prizes', 
@@ -152,18 +185,18 @@ class Wallets:
                 )
             """
             data = [
-                entry['id'], 
-                corporation_id, 
-                entry['ref_type'], 
-                journal_date, 
-                year_month, 
-                entry['description'], 
-                entry.get('amount', None), 
-                entry.get('reason', None), 
-                entry.get('first_party_id', None), 
-                entry.get('second_party_id', None), 
-                entry.get('context_id_type', None), 
-                entry.get('context_id', None), 
+                entry['id'],
+                corporation_id,
+                entry['ref_type'],
+                journal_date,
+                year_month,
+                entry['description'],
+                entry.get('amount', None),
+                entry.get('reason', None),
+                entry.get('first_party_id', None),
+                entry.get('second_party_id', None),
+                entry.get('context_id_type', None),
+                entry.get('context_id', None),
                 division
             ]
             cursor.execute(sql, data)
@@ -176,9 +209,21 @@ class Wallets:
             # only apply to division 1 for now, has most entries.
             if division == 1:
                 if previous_journal_date < first_journal_date:
-                    self.__read_wallet(corporation_id, character_id, previous_journal_date, division, page + 1)
+                    self.__read_wallet(
+                        corporation_id,
+                        character_id,
+                        previous_journal_date,
+                        division,
+                        page + 1
+                    )
             else:
-                self.__read_wallet(corporation_id, character_id, previous_journal_date, division, page + 1)
+                self.__read_wallet(
+                    corporation_id,
+                    character_id,
+                    previous_journal_date,
+                    division,
+                    page + 1
+                )
 
         if last_journal_date == '':  # no bounties or mission rewards in journal
             return request_time.strftime('%Y-%m-%d %H:%M:%S')
