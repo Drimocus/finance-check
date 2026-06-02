@@ -6,6 +6,7 @@ import os
 
 import mysql.connector
 import requests
+import json
 from typing import Union
 from flask import render_template, url_for, session, Flask, request
 from werkzeug.utils import redirect
@@ -377,4 +378,40 @@ class Tokens:
         """update database wallet_journals"""
         self.__wallets.run()
         return redirect(url_for('tokens'))
+
+    def test_mail(self) -> wzResponse:
+        receiver_id = int(request.form.get('receiver_id'))
+        sender_id = int(request.form.get('sender_id'))
+        recipients=[{
+            "recipient_id": receiver_id,
+            "recipient_type": "character"
+        }]
+
+        evemail_endpoint = (
+            f"{env_vars['NEUCORE_BASE_URL']}/api/app/v2/esi/characters/"
+            f"{sender_id}/mail/?datasource="
+            f"{sender_id}:{env_vars['FINANCE_MAILS_EVE_LOGIN']}"
+        )
+        mail_info = {
+            "approved_cost": 0,
+            "body": f"Hello {receiver_id}",
+            "recipients": recipients,
+            "subject": "Finance Check Test Mail"
+        }
+        self.__app.logger.info(
+            f"Sending test mail to {receiver_id} with "
+            f"{env_vars['FINANCE_EVE_LOGIN']} token ({self.__auth_header}) "
+            f"at {self.__available_tokens}"
+        )
+        response = requests.post(
+            url = evemail_endpoint,
+            data=json.dumps(mail_info),
+            headers=self.__auth_header,
+            timeout=15
+        )
+        if response.status_code == 201:
+            self.__app.logger.info(f"Test mail sent to {receiver_id}")
+        else:
+            info_str = f"{response.status_code}, {response.headers}, {response.content}"
+            self.__app.logger.error(info_str)
         return redirect(url_for('tokens'))

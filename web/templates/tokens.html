@@ -25,6 +25,14 @@
             <dd>If positive: The amount by which the corporation still has overpaid it's tax</dd>
         </dl>
     </dl>
+    <span id="test_mail_span">
+        Sender: <input id="sender_id" type="number" value=0>
+        Receiver: <input id="receiver_id" type="number" value=0>
+        
+        <span id="test_mail_button_span">
+            <input type="submit" value="Send Test Mail" onclick=testMail()>
+        </span>
+    </span><br>
 
     <table class="list">
         {% for alliance_id in alliance_ids %}
@@ -255,14 +263,14 @@
 
     function updateWallets() {
         const formData = new FormData();
-        start = new Date();
-        ceo_status_span = document.getElementById("wallet_status");
+        const ceo_status_span = document.getElementById("wallet_status");
+        var start = new Date();
         ceo_status_span.innerHTML = "Updating...";
         fetch(`/tokens/update_wallets`, { 
             method: 'POST', redirect: "follow", body: formData, 
         }).then(response => {
-            took = (new Date()) - start;
-            ceo_status_span.innerHTML = '<input type="submit" value="Update All CEOs" onclick=updateCEOS()> Finished (' + Math.round(took/1000) + 's), reload page to see results.';
+            var took = Math.round((new Date() - start)/1000);
+            ceo_status_span.innerHTML = '<input type="submit" value="Update All Wallets" onclick=updateWallets()> Finished (' + took + 's), reload page to see results.';
             // could update page with javascript instead of reload
             // location.reload();
         });
@@ -270,16 +278,33 @@
 
     function updateCEOS() {
         const formData = new FormData();
-        start = new Date();
-        ceo_status_span = document.getElementById("ceo_status");
+        const ceo_status_span = document.getElementById("ceo_status");
+        var start = new Date();
         ceo_status_span.innerHTML = "Updating...";
         fetch(`/tokens/update_ceos`, { 
             method: 'POST', redirect: "follow", body: formData, 
         }).then(response => {
-            took = (new Date()) - start;
-            ceo_status_span.innerHTML = '<input type="submit" value="Update All CEOs" onclick=updateCEOS()> Finished (' + Math.round(took/1000) + 's), reload page to see results.';
+            var took = Math.round((new Date() - start)/1000);
+            ceo_status_span.innerHTML = '<input type="submit" value="Update All CEOs" onclick=updateCEOS()> Finished (' + took + 's), reload page to see results.';
             // could update page with javascript instead of reload
             // location.reload();
+        });
+    }
+
+    function testMail() {
+        const formData = new FormData();
+        const test_mail_button_span = document.getElementById("test_mail_button_span");
+        var receiver_id = document.getElementById("receiver_id").value;
+        var sender_id = document.getElementById("sender_id").value;
+        var m_start = new Date();
+        formData.append("receiver_id", receiver_id);
+        formData.append("sender_id", sender_id);
+        test_mail_span.innerHTML = 'Sending...';
+        fetch(`/tokens/test_mail`, { 
+            method: 'POST', redirect: "follow", body: formData, 
+        }).then(response => {
+            var took = Math.round((new Date() - start)/1000);
+            test_mail_button_span.innerHTML = '<input type="submit" value="Send Test Mail" onclick="testMail()">' + ' Sent (' + took + 's)';
         });
     }
 </script>
