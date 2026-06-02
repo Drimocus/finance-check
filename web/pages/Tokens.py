@@ -42,6 +42,7 @@ class Tokens:
             self.__check_corporation_ids = [int(x) for x in check_corporations_str.split(',')]
         else:
             self.__check_corporation_ids = []
+        self.__wallets = Wallets()
 
         self.__db = mysql.connector.connect(
             host=os.getenv('DB_HOST'),
@@ -264,8 +265,15 @@ class Tokens:
         self.__update_corporations_table()
         return redirect(url_for('tokens'))
 
-    def __update_ceos(self, missing_only=True, limit=10) -> None:
-        """limit to 10 for test because it is slow / rate limit sketchy"""
+    def __update_ceos(
+        self,
+        missing_only = True,
+        limit: Union[int, None] = 5
+    ) -> None:
+        """
+            default to missing only andlimit to 5 for new entries because 
+            it is slow and we probably just want the page to load first.
+        """
         for corp_id, corp in self.__corporations.items():
             if not missing_only or corp["corporation_ceo_id"] is None:
                 url = f'{self.__esi_base_url}/corporations/{corp_id}'
@@ -343,5 +351,6 @@ class Tokens:
 
     def update_wallets(self) -> wzResponse:
         """update database wallet_journals"""
-        Wallets().run()
+        self.__wallets.run()
+        return redirect(url_for('tokens'))
         return redirect(url_for('tokens'))
