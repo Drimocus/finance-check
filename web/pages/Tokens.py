@@ -12,6 +12,23 @@ from werkzeug.utils import redirect
 from werkzeug.wrappers import Response as wzResponse
 
 from wallets import Wallets
+
+env_vars = {
+    'DB_HOST' : os.getenv('DB_HOST'),
+    'DB_PORT' : os.getenv('DB_PORT', '3306'),
+    'DB_USER' : os.getenv('DB_USER'),
+    'DB_PASSWORD' : os.getenv('DB_PASSWORD'),
+    'DB_DATABASE' : os.getenv('DB_DATABASE'),
+
+    'ESI_BASE_URL' : 'https://esi.evetech.net/latest',
+    'NEUCORE_BASE_URL' : os.getenv('API_BASE_URL'),
+    'FINANCE_NEUCORE_KEY' : os.getenv('API_KEY'),
+    'FINANCE_EVE_LOGIN' : os.getenv('API_EVE_LOGIN'),
+
+    'CHECK_ALLIANCES' : os.getenv('CHECK_ALLIANCES'),
+    'CHECK_CORPORATIONS' : os.getenv('CHECK_CORPORATIONS'),
+}
+
 class Tokens:
     """Tokens page and routes
     
@@ -27,30 +44,37 @@ class Tokens:
 
     def __init__(self, app: Flask):
         self.__app = app
-        self.__esi_base_url = 'https://esi.evetech.net/latest'
-        self.__core_base_url = os.getenv('API_BASE_URL') + '/api/app'
-        self.__auth_header = {'Authorization': 'Bearer ' + os.getenv('API_KEY')}
-        self.__login_name = os.getenv('API_EVE_LOGIN')
-
-        check_alliances_str = os.getenv('CHECK_ALLIANCES')
-        if check_alliances_str is not None:
-            self.__check_alliance_ids = [int(x) for x in check_alliances_str.split(',')]
-        else:
-            self.__check_alliance_ids = []
-        check_corporations_str = os.getenv('CHECK_CORPORATIONS')
-        if check_corporations_str is not None:
-            self.__check_corporation_ids = [int(x) for x in check_corporations_str.split(',')]
-        else:
-            self.__check_corporation_ids = []
+        self.__auth_header = {'Authorization': 'Bearer ' + env_vars['FINANCE_NEUCORE_KEY']}
         self.__wallets = Wallets()
 
+        self.__check_env_vars()
+
         self.__db = mysql.connector.connect(
-            host=os.getenv('DB_HOST'),
-            port=os.getenv('DB_PORT', '3306'),
-            user=os.getenv('DB_USER'),
-            password=os.getenv('DB_PASSWORD'),
-            database=os.getenv('DB_DATABASE'),
+            host=env_vars['DB_HOST'],
+            port=env_vars['DB_PORT'],
+            user=env_vars['DB_USER'],
+            password=env_vars['DB_PASSWORD'],
+            database=env_vars['DB_DATABASE'],
         )
+
+    def __check_env_vars(self):
+        for key in env_vars.values():
+            if key is None:
+                self.__app.logger.error(f'system environment variable {key} not configured')
+
+        env_vars['NEUCORE_V1_BASE_URL'] = env_vars['NEUCORE_BASE_URL'] + '/api/app/v1/esi'
+        if env_vars['CHECK_ALLIANCES'] is not None and env_vars['CHECK_ALLIANCES'] != '':
+            env_vars['CHECK_ALLIANCE_IDS'] = [
+                int(x) for x in env_vars['CHECK_ALLIANCES'].split(',')
+            ]
+        else:
+            env_vars['CHECK_ALLIANCE_IDS'] = []
+        if env_vars['CHECK_CORPORATIONS'] is not None and env_vars['CHECK_CORPORATIONS'] != '':
+            env_vars['CHECK_CORPORATION_IDS'] = [
+                int(x) for x in env_vars['CHECK_CORPORATIONS'].split(',')
+            ]
+        else:
+            env_vars['CHECK_CORPORATION_IDS'] = []
 
     def show(self) -> Union[str,wzResponse]:
         """Tokens page"""
@@ -69,9 +93,9 @@ class Tokens:
             self.__corporations[corp_dict["id"]] = corp_dict
 
         # check / add wanted alliances & corps in env vars
-        for alliance_id in self.__check_alliance_ids:
+        for alliance_id in env_vars['CHECK_ALLIANCE_IDS']:
             self.__fetch_alliance_corporations(alliance_id)
-        self.__add_new_corporations(self.__check_corporation_ids)
+        self.__add_new_corporations(env_vars['CHECK_CORPORATION_IDS'])
 
         # update ceo's and names
         self.__update_ceos()
@@ -88,8 +112,8 @@ class Tokens:
         ))
 
         # add token info
-        url = f'{self.__core_base_url}/v1/esi/eve-login/{self.__login_name}/token-data'
-        response = requests.get(url, headers=self.__auth_header, timeout=15)
+        token_data_url = f'{env_vars["NEUCORE_V1_BASE_URL"]}/eve-login/{env_vars['FINANCE_EVE_LOGIN']}/token-data'
+        response = requests.get(token_data_url, headers=self.__auth_header, timeout=15)
         if response.status_code == 200:
             self.__available_tokens = response.json()
         else:
@@ -112,7 +136,7 @@ class Tokens:
         return render_template(
             'tokens.html',
             character_id=session['character_id'],
-            alliance_ids=self.__check_alliance_ids + [0],
+            alliance_ids=env_vars["CHECK_ALLIANCE_IDS"] + [0],
             has_token=self.__has_token,
             corporations=self.__corporations
         )
@@ -208,7 +232,7 @@ class Tokens:
 
     def __fetch_alliance_corporations(self, alliance_id) -> None:
         # return {99003214: [98024275], 99010079: [98112599, 98209548]}
-        url = f'{self.__esi_base_url}/alliances/{alliance_id}/corporations/'
+        url = f'{env_vars['ESI_BASE_URL']}/alliances/{alliance_id}/corporations/'
         response = requests.get(url, timeout=15)
         if response.status_code == 200:
             self.__add_new_corporations(response.json(), alliance_id)
@@ -227,7 +251,7 @@ class Tokens:
             ceo_id_corp_lookup[k] = v
 
         response = requests.post(
-            url=f'{self.__esi_base_url}/universe/names/',
+            url=f'{env_vars['ESI_BASE_URL']}/universe/names/',
             json=corporation_ids+list(ceo_id_corp_lookup),
             timeout=15
         )
@@ -247,7 +271,7 @@ class Tokens:
         for corp in self.__corporations.values():
             if corp["corporation_owner_id"] is not None:
                 owner_names[corp["corporation_owner_id"]] = None
-        url = f'{self.__esi_base_url}/universe/names'
+        url = f'{env_vars['ESI_BASE_URL']}/universe/names'
         response = requests.post(url, json=list(owner_names), timeout=15)
         if response.status_code == 200:
             for item in response.json():
@@ -276,7 +300,7 @@ class Tokens:
         """
         for corp_id, corp in self.__corporations.items():
             if not missing_only or corp["corporation_ceo_id"] is None:
-                url = f'{self.__esi_base_url}/corporations/{corp_id}'
+                url = f'{env_vars['ESI_BASE_URL']}/corporations/{corp_id}'
                 response = requests.get(url, timeout=15)
                 if response.status_code == 200:
                     corp_info = response.json()
@@ -333,7 +357,7 @@ class Tokens:
         cursor.close()
 
     def __get_character_id(self, character_name):
-        url = f'{self.__esi_base_url}/universe/ids'
+        url = f'{env_vars['ESI_BASE_URL']}/universe/ids'
         response = requests.post(url, json=[character_name], timeout=15)
         if response.status_code == 200:
             character_ids = response.json().get("characters", [])
