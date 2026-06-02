@@ -4,7 +4,7 @@ from typing import Optional
 
 import mysql.connector
 import requests
-
+from logging import Logger
 
 class Wallets:
 
