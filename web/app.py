@@ -11,7 +11,7 @@ from werkzeug.wrappers import Response as wzResponse
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY')
-
+app.logger.setLevel(os.getenv('UWSGI_LOG_LEVEL', 'ERROR').upper())
 
 @app.route('/')
 def index() -> Union[str, Response]:
@@ -33,6 +33,10 @@ def update_ceos() -> wzResponse:
 @app.route('/tokens/update_wallets', methods=['POST'])
 def update_wallets() -> wzResponse:
     return Tokens(app).update_wallets()
+
+@app.route('/tokens/test_mail', methods=['POST'])
+def test_mail() -> wzResponse:
+    return Tokens(app).test_mail()
 
 @app.route('/auth/login')
 def auth_login() -> str:

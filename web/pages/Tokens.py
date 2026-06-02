@@ -25,6 +25,8 @@ env_vars = {
     'NEUCORE_BASE_URL' : os.getenv('API_BASE_URL'),
     'FINANCE_NEUCORE_KEY' : os.getenv('API_KEY'),
     'FINANCE_EVE_LOGIN' : os.getenv('API_EVE_LOGIN'),
+    'FINANCE_MAILS_EVE_LOGIN' : os.getenv('FINANCE_MAILS_EVE_LOGIN'),
+    'FINANCE_MAILS_CHAR_NAME' : os.getenv('FINANCE_MAILS_CHAR_NAME'),
 
     'CHECK_ALLIANCES' : os.getenv('CHECK_ALLIANCES'),
     'CHECK_CORPORATIONS' : os.getenv('CHECK_CORPORATIONS'),
@@ -113,7 +115,10 @@ class Tokens:
         ))
 
         # add token info
-        token_data_url = f'{env_vars["NEUCORE_V1_BASE_URL"]}/eve-login/{env_vars['FINANCE_EVE_LOGIN']}/token-data'
+        token_data_url = (
+            f'{env_vars["NEUCORE_V1_BASE_URL"]}/eve-login/'
+            f'{env_vars['FINANCE_EVE_LOGIN']}/token-data'
+        )
         response = requests.get(token_data_url, headers=self.__auth_header, timeout=15)
         if response.status_code == 200:
             self.__available_tokens = response.json()
@@ -380,6 +385,7 @@ class Tokens:
         return redirect(url_for('tokens'))
 
     def test_mail(self) -> wzResponse:
+        """send a test mail"""
         receiver_id = int(request.form.get('receiver_id'))
         sender_id = int(request.form.get('sender_id'))
         recipients=[{
