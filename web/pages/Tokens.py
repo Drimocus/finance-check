@@ -13,6 +13,7 @@ from werkzeug.utils import redirect
 from werkzeug.wrappers import Response as wzResponse
 
 from wallets import Wallets
+from tax_records import get_brave_tax_balance
 from tax_records import update_tax_records as __update_tax_records
 
 env_vars = {
@@ -134,11 +135,8 @@ class Tokens:
             self.__corporations[corp_id]["tokens"] = tokens
 
         # add tax balance
-        last_tax_records = self.__last_tax_records()
-        for tax_record in last_tax_records:
-            self.__corporations[
-                tax_record["corporation_id"]
-            ]["brave_tax_balance"] = tax_record["brave_tax_balance"]
+        for corp_id, corp in self.__corporations.items():
+            corp["brave_tax_balance"] = get_brave_tax_balance(corp_id)
 
         # render page
         return render_template(
@@ -195,22 +193,6 @@ class Tokens:
         cursor.execute(sql)
         self.__db.commit()
         cursor.close()
-
-    def __last_tax_records(self) -> list[dict]:
-        cursor = self.__db.cursor(dictionary=True)
-        sql = """
-            SELECT corporation_id, brave_tax_balance, tax_month_date
-            FROM tax_records as data 
-            WHERE tax_month_date = (
-                SELECT MAX(tax_month_date)
-                FROM tax_records
-                WHERE corporation_id = data.corporation_id
-            );
-        """
-        cursor.execute(sql)
-        results = cursor.fetchall()
-        cursor.close()
-        return results
 
     def __add_new_corporations(self, corp_ids, alliance_id=0) -> None:
         for corp_id in corp_ids:

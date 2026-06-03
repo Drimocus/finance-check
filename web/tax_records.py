@@ -203,30 +203,24 @@ def insert_tax_record(tax_record: dict):
     brave_db.commit()
     db_cursor.close()
 
-def get_last_tax_record(corporation_id: int) -> dict | None:
-    """get last tax record for a corporation from db"""
+def get_brave_tax_balance(corporation_id: int) -> int | None:
+    """get brave tax balance for a corporation from db"""
     db_cursor = brave_db.cursor(dictionary=True)
     db_cursor.execute(
         f'''
             SELECT
-                corporation_id, 
-                tax_month_date, 
-                taxable_income, 
-                corp_tax_amount, 
                 brave_tax_amount, 
                 brave_tax_payments
             FROM tax_records 
-            WHERE corporation_id = {corporation_id}
-            AND tax_month_date = (
-                SELECT MAX(tax_month_date)
-                FROM tax_records
-                WHERE corporation_id = {corporation_id}
-            );
+            WHERE corporation_id = {corporation_id};
         '''
     )
-    res = db_cursor.fetchone()
+    tax_records = db_cursor.fetchall()
     db_cursor.close()
-    return res
+
+    total_tax = sum(record["brave_tax_amount"] for record in tax_records)
+    total_payment = sum(record["brave_tax_payments"] for record in tax_records)
+    return total_payment - total_tax
 
 def sql_list_format(values: list) -> str:
     """Formats a list of values into a string suitable for use in an SQL IN clause."""
