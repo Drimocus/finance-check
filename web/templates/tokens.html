@@ -7,7 +7,7 @@
     <dl>
         <dt>Token columns:</dt>
         <dt>Last Journal</dt><dd>The last time the wallet data for this corporation was successfully updated. Wallet data can only be updated with a configured, still valid, active key. </dd>
-        <dd>You can force a wallet data update here, This may take several minutes: <span id="wallet_status"><input type="submit" value="Update All Corp Wallets" onclick=updateWallets()></span></dd>
+        <dd>You can force a wallet data update here, This may take several minutes: <span id="wallet_status"><input type="submit" value="Update All Wallet Journals" onclick=updateWallets()></span></dd>
         <dt>Active</dt><dd>Controls wallet journal updates, if disabled the corporations wallets will not be tracked. Tax reports require wallet data, if disabled the corp will also stop receiving tax reports.</dd>
     </dl>
     <dl>
@@ -35,12 +35,12 @@
         </span>
     </span><br><br>
     <span id="tax_records_update_span">
-        Manual Tax Records Update (requires wallet journal data) - 
+        Tax Records Update (requires wallet journal data) - 
         Year: <input id="t_u_year" type="number" value=2026>
         Month: <input id="t_u_month" type="number" value=6>
         
         <span id="tax_records_update_button_span">
-            <input type="submit" value="Send Test Mail" onclick=updateTaxRecords()>
+            <input type="submit" value="Update Tax Records" onclick=updateTaxRecords()>
         </span>
     </span><br><br>
 
@@ -323,8 +323,8 @@
         var year = document.getElementById("t_u_year").value;
         var month = document.getElementById("t_u_month").value;
         var m_start = new Date();
-        formData.append("year", receiver_id);
-        formData.append("month", sender_id);
+        formData.append("year", year);
+        formData.append("month", month);
         tax_records_update_button_span.innerHTML = 'Sending...';
         fetch(`/tokens/update_tax_records`, { 
             method: 'POST', redirect: "follow", body: formData, 
