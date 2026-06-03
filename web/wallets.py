@@ -4,7 +4,7 @@ from typing import Optional
 
 import mysql.connector
 import requests
-from logging import Logger
+import logging
 
 env_vars = {
     'DB_HOST' : os.getenv('DB_HOST'),
@@ -19,11 +19,17 @@ env_vars = {
 
     'ALL_TYPES_CORPORATIONS' : os.getenv('ALL_TYPES_CORPORATIONS')
 }
+JOURNAL_DATEFORMAT = "%Y-%m-%d %H:%M:%S"
 
 class Wallets:
 
     def __init__(self):
-        self.logger = Logger('Wallets')
+        self.logger = logging.getLogger(__name__)
+        logging.basicConfig(
+            filename=f'{__name__}.log',
+            encoding='utf-8',
+            level=os.getenv('UWSGI_LOG_LEVEL', 'ERROR').upper()
+        )
         self.__auth_header = {'Authorization': 'Bearer ' + env_vars['FINANCE_NEUCORE_KEY']}
 
         self.__check_env_vars()
@@ -226,6 +232,6 @@ class Wallets:
                 )
 
         if last_journal_date == '':  # no bounties or mission rewards in journal
-            return request_time.strftime('%Y-%m-%d %H:%M:%S')
+            return request_time.strftime(JOURNAL_DATEFORMAT)
         else:
             return last_journal_date

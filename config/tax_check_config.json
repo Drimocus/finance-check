@@ -21,10 +21,6 @@
         "agent_mission_time_bonus_reward",
         "daily_goal_payouts",
         "freelance_jobs_reward"
-    ],
-    "excluded_corporations": [
-        "Brave United Holding",
-        "Brave POS Boys",
-        "The Brave Dojo"
     ]
+
 }
