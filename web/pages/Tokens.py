@@ -13,8 +13,7 @@ from werkzeug.utils import redirect
 from werkzeug.wrappers import Response as wzResponse
 
 from wallets import Wallets
-from tax_records import get_brave_tax_balance
-from tax_records import update_tax_records as __update_tax_records
+from tax_records import TaxRecords
 
 env_vars = {
     'DB_HOST' : os.getenv('DB_HOST'),
@@ -51,6 +50,7 @@ class Tokens:
         self.__app = app
         self.__auth_header = {'Authorization': 'Bearer ' + env_vars['FINANCE_NEUCORE_KEY']}
         self.__wallets = Wallets()
+        self.__tax_records = TaxRecords()
 
         self.__check_env_vars()
 
@@ -136,7 +136,7 @@ class Tokens:
 
         # add tax balance
         for corp_id, corp in self.__corporations.items():
-            corp["brave_tax_balance"] = get_brave_tax_balance(corp_id)
+            corp["brave_tax_balance"] = self.__tax_records.get_brave_tax_balance(corp_id)
 
         # render page
         return render_template(
@@ -372,7 +372,7 @@ class Tokens:
         """update database wallet_journals"""
         year = int(request.form.get('year'))
         month = int(request.form.get('month'))
-        __update_tax_records(year, month)
+        self.__tax_records.update_tax_records(year, month)
         return redirect(url_for('tokens'))
 
     def test_mail(self) -> wzResponse:
