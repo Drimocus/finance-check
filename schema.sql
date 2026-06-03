@@ -60,7 +60,6 @@ CREATE TABLE tax_records
     corp_tax_amount     BIGINT           not null,
     brave_tax_amount    BIGINT           not null,
     brave_tax_payments  BIGINT           not null,
-    brave_tax_balance   BIGINT           not null,
     PRIMARY KEY (corporation_id, tax_month_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 

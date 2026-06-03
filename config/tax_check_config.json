@@ -3,8 +3,6 @@
     "alt_corps_exempt_income": 1000000000,
     "main_corps_base_tax": 0,
     "main_corps_exempt_income": 0,
-    "evemail_main_corps": false,
-    "evemail_alt_corps": false,
     "corp_info_table_name": "corporations",
     "wallet_journal_table_name": "wallet_journal",
     "alt_corps_tax_receiving_corp": "Brave United Holding",

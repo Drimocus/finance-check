@@ -44,11 +44,6 @@ for key in env_vars.values():
         logger.error('system environment variable %s not configured', key)
 env_vars['NEUCORE_V1_BASE_URL'] = env_vars['NEUCORE_BASE_URL'] + '/api/app/v1/esi'
 env_vars['NEUCORE_V2_BASE_URL'] = env_vars['NEUCORE_BASE_URL'] + '/api/app/v2/esi'
-# set up some dates for last month
-current_date = datetime.now()
-tax_month_end = datetime(current_date.year, current_date.month, 1)
-tax_month_last_day = tax_month_end - timedelta(days=1)
-tax_month_start = datetime(tax_month_last_day.year, tax_month_last_day.month,1)
 
 def check_mailer_token():
     """
@@ -121,8 +116,8 @@ def select_corporation_wallet_journal(
     description_contains: str = "",
     ref_types: Union[list[str], None] = None,
     divisions: Union[list[int], None] = None,
-    date_min: datetime = tax_month_start,
-    date_max: datetime = tax_month_end
+    date_min: Union[datetime, None] = None,
+    date_max: Union[datetime, None] = None
 ) -> list[dict]:
     """select from db with filters"""
     if ref_types is None:
@@ -140,8 +135,10 @@ def select_corporation_wallet_journal(
         filters.append(f"ref_type IN {sql_list_format(ref_types)}")
     if description_contains:
         filters.append(f"description LIKE '%{description_contains}%'")
-    filters.append(f"journal_date >= '{date_min.strftime(JOURNAL_DATEFORMAT)}'")
-    filters.append(f"journal_date < '{date_max.strftime(JOURNAL_DATEFORMAT)}'")
+    if date_min is not None:
+        filters.append(f"journal_date >= '{date_min.strftime(JOURNAL_DATEFORMAT)}'")
+    if date_max is not None:
+        filters.append(f"journal_date < '{date_max.strftime(JOURNAL_DATEFORMAT)}'")
     row_filter = " AND ".join(filters)
     if row_filter != "":
         row_filter = f"WHERE {row_filter}"
@@ -174,26 +171,33 @@ def select_taxable_corps() -> list[dict]:
 
 def insert_tax_record(tax_record: dict):
     """Insert tax record into db"""
+    tax_record_columns = [
+        "corporation_id", 
+        "tax_month_date", 
+        "taxable_income", 
+        "corp_tax_amount", 
+        "brave_tax_amount", 
+        "brave_tax_payments"
+    ]
+    update_str = ", ".join(
+        [
+            f"{col_name} = VALUES({col_name})"
+            for col_name in tax_record_columns[1:]
+        ]
+    )
     db_cursor = brave_db.cursor()
     db_cursor.execute(
         f'''
-            INSERT INTO tax_records (
-                corporation_id, 
-                tax_month_date, 
-                taxable_income, 
-                corp_tax_amount, 
-                brave_tax_amount, 
-                brave_tax_payments, 
-                brave_tax_balance
-            ) VALUES (
+            INSERT INTO tax_records ({", ".join(tax_record_columns)})
+            VALUES (
                 {tax_record["corporation_id"]},
                 '{tax_record["tax_month_date"].strftime(JOURNAL_DATEFORMAT)}',
                 {tax_record["taxable_income"]},
                 {tax_record["corp_tax_amount"]},
                 {tax_record["brave_tax_amount"]},
-                {tax_record["brave_tax_payments"]},
-                {tax_record["brave_tax_balance"]}
-            );
+                {tax_record["brave_tax_payments"]}
+            )
+            ON DUPLICATE KEY UPDATE {update_str};
         '''
     )
     brave_db.commit()
@@ -210,8 +214,7 @@ def get_last_tax_record(corporation_id: int) -> dict | None:
                 taxable_income, 
                 corp_tax_amount, 
                 brave_tax_amount, 
-                brave_tax_payments, 
-                brave_tax_balance
+                brave_tax_payments
             FROM tax_records 
             WHERE corporation_id = {corporation_id}
             AND tax_month_date = (
@@ -231,94 +234,101 @@ def sql_list_format(values: list) -> str:
         return ""
     return "(" + ", ".join([f"'{x}'" for x in values]) + ")"
 
-def __update_tax_record(corporation: dict):
+def update_tax_record(
+        corporation: dict,
+        year: int,
+        month: int
+    ):
     """make tax record, insert into database"""
+    tax_month_start = datetime(year, month,1)
+    if month < 12:
+        tax_month_end = datetime(year, month + 1, 1)
+    else:
+        tax_month_end =datetime(year + 1, 1, 1)
+
     corporation_id = corporation["id"]
     corporation_name = corporation["corporation_name"]
     is_alt_corp = corporation["is_alt_corp"]
     corporation_ceo_id = corporation["corporation_ceo_id"]
     corporation_owner_id = corporation["corporation_owner_id"]
 
-    previous_record = get_last_tax_record(corporation_id)
-    if previous_record is None:
-        prev_balance = 0
-        prev_tax_month = datetime.fromtimestamp(0)
+    tax_entries = select_corporation_wallet_journal(
+        corporation_id,
+        divisions=[1],
+        ref_types=config["taxed_ref_types"],
+        date_min=tax_month_start,
+        date_max=tax_month_end
+    )
+    taxable_income = sum([entry['amount'] for entry in tax_entries])
+
+    if is_alt_corp:
+        base_tax = config['alt_corps_base_tax']
+        tax_receiving_corp = config['alt_corps_tax_receiving_corp']
+        taxable_income = max(0, taxable_income - config['alt_corps_exempt_income'])
     else:
-        prev_balance = previous_record["brave_tax_balance"]
-        prev_tax_month = previous_record["tax_month_date"]
+        base_tax = config['main_corps_base_tax']
+        tax_receiving_corp = config['main_corps_tax_receiving_corp']
+        taxable_income = max(0, taxable_income - config['main_corps_exempt_income'])
 
-    if tax_month_start > prev_tax_month :
-        tax_entries = select_corporation_wallet_journal(
-            corporation_id,
-            divisions=[1],
-            ref_types=config["taxed_ref_types"],
-            date_min=tax_month_start,
-            date_max=tax_month_end
-        )
-        taxable_income = sum([entry['amount'] for entry in tax_entries])
+    payment_entries = select_corporation_wallet_journal(
+        corporation_id,
+        ref_types=["corporation_account_withdrawal"],
+        description_contains=tax_receiving_corp,
+        date_min=tax_month_start,
+        date_max=tax_month_end
+    )
 
-        if is_alt_corp:
-            base_tax = config['alt_corps_base_tax']
-            tax_receiving_corp = config['alt_corps_tax_receiving_corp']
-            taxable_income = max(0, taxable_income - config['alt_corps_exempt_income'])
-        else:
-            base_tax = config['main_corps_base_tax']
-            tax_receiving_corp = config['main_corps_tax_receiving_corp']
-            taxable_income = max(0, taxable_income - config['main_corps_exempt_income'])
+    brave_tax_payments = sum(entry['amount'] for entry in payment_entries) * -1
+    corp_tax_amount = int(taxable_income/2)
+    brave_tax_amount = taxable_income - corp_tax_amount + base_tax
 
-        payment_entries = select_corporation_wallet_journal(
-            corporation_id,
-            ref_types=["corporation_account_withdrawal"],
-            description_contains=tax_receiving_corp,
-            date_min=tax_month_start,
-            date_max=tax_month_end
-        )
+    tax_record = {
+        "corporation_id": corporation_id,
+        "tax_month_date": tax_month_start,
+        "taxable_income": taxable_income,
+        "corp_tax_amount": corp_tax_amount,
+        "brave_tax_amount": brave_tax_amount,
+        "brave_tax_payments": brave_tax_payments,
+        "corporation_name": corporation_name,
+        "corporation_ceo_id": corporation_ceo_id,
+        "corporation_owner_id": corporation_owner_id,
+        "is_alt_corp": is_alt_corp,
+    }
+    insert_tax_record(tax_record)
+    return tax_record
 
-        brave_tax_payments = sum(entry['amount'] for entry in payment_entries) * -1
-        corp_tax_amount = int(taxable_income/2)
-        brave_tax_amount = taxable_income - corp_tax_amount + base_tax
-        brave_tax_balance = prev_balance - brave_tax_amount + brave_tax_payments
-
-        tax_record = {
-            "corporation_id": corporation_id,
-            "tax_month_date": tax_month_start,
-            "taxable_income": taxable_income,
-            "corp_tax_amount": corp_tax_amount,
-            "brave_tax_amount": brave_tax_amount,
-            "brave_tax_payments": brave_tax_payments,
-            "brave_tax_balance": brave_tax_balance,
-            "corporation_name": corporation_name,
-            "corporation_ceo_id": corporation_ceo_id,
-            "corporation_owner_id": corporation_owner_id,
-            "is_alt_corp": is_alt_corp,
-        }
-        insert_tax_record(tax_record)
-        return tax_record
-    else:
-        return None
-
-def update_tax_records():
+def update_tax_records(
+    year: int,
+    month: int
+):
     """update database tax records for all corps"""
     corporations = select_taxable_corps()
     tax_records = []
     if len(corporations) == 0:
         logger.info('check_taxes: no taxable corporations found in db, exiting')
     for corporation in corporations:
-        tax_record = __update_tax_record(corporation)
+        tax_record = update_tax_record(corporation, year, month)
         if tax_record:
             tax_records.append(tax_record)
     return tax_records
 
 def main():
     """if called by cronjob"""
-    print(env_vars)
-    logger.info((
-            "check taxes: Current date: %s, Tax month start: %s, "
-            "Tax month end: %s"
-        ), current_date, tax_month_start, tax_month_end
+    # set up some dates for last month
+    current_date = datetime.now()
+    tax_month_end = datetime(current_date.year, current_date.month, 1)
+    tax_month_last_day = tax_month_end - timedelta(days=1)
+
+    logger.info(
+        "checking taxes, current date: %s, checking tax for month: %s-%s",
+        current_date,
+        tax_month_last_day.year,
+        tax_month_last_day.month
     )
-    logger.debug('check_taxes: updating tax records for all corporations')
-    tax_records = update_tax_records()
+    tax_records = update_tax_records(
+        2026,
+        6
+    )
     for tax_record in tax_records:
         logger.info(tax_record)
         is_alt_corp = tax_record["is_alt_corp"]
@@ -334,6 +344,7 @@ def main():
                 body,
                 mail_subject,
             )
+
     # do a nice commit and close at the end just in case
     brave_db.commit()
     brave_db.close()

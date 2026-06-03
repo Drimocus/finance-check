@@ -34,6 +34,10 @@ def update_ceos() -> wzResponse:
 def update_wallets() -> wzResponse:
     return Tokens(app).update_wallets()
 
+@app.route('/tokens/update_tax_records', methods=['POST'])
+def update_tax_records() -> wzResponse:
+    return Tokens(app).update_tax_records()
+
 @app.route('/tokens/test_mail', methods=['POST'])
 def test_mail() -> wzResponse:
     return Tokens(app).test_mail()

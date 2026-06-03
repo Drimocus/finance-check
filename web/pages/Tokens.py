@@ -13,6 +13,7 @@ from werkzeug.utils import redirect
 from werkzeug.wrappers import Response as wzResponse
 
 from wallets import Wallets
+from tax_records import update_tax_records as __update_tax_records
 
 env_vars = {
     'DB_HOST' : os.getenv('DB_HOST'),
@@ -66,6 +67,7 @@ class Tokens:
                 self.__app.logger.error(f'system environment variable {key} not configured')
 
         env_vars['NEUCORE_V1_BASE_URL'] = env_vars['NEUCORE_BASE_URL'] + '/api/app/v1/esi'
+        env_vars['NEUCORE_V2_BASE_URL'] = env_vars['NEUCORE_BASE_URL'] + '/api/app/v2/esi'
         if env_vars['CHECK_ALLIANCES'] is not None and env_vars['CHECK_ALLIANCES'] != '':
             env_vars['CHECK_ALLIANCE_IDS'] = [
                 int(x) for x in env_vars['CHECK_ALLIANCES'].split(',')
@@ -384,6 +386,13 @@ class Tokens:
         self.__wallets.run()
         return redirect(url_for('tokens'))
 
+    def update_tax_records(self) -> wzResponse:
+        """update database wallet_journals"""
+        year = int(request.form.get('year'))
+        month = int(request.form.get('month'))
+        __update_tax_records(year, month)
+        return redirect(url_for('tokens'))
+
     def test_mail(self) -> wzResponse:
         """send a test mail"""
         receiver_id = int(request.form.get('receiver_id'))
@@ -394,9 +403,8 @@ class Tokens:
         }]
 
         evemail_endpoint = (
-            f"{env_vars['NEUCORE_BASE_URL']}/api/app/v2/esi/characters/"
-            f"{sender_id}/mail/?datasource="
-            f"{sender_id}:{env_vars['FINANCE_MAILS_EVE_LOGIN']}"
+            f"{env_vars['NEUCORE_V2_BASE_URL']}/characters/{sender_id}/mail/"
+            f"?datasource="f"{sender_id}:{env_vars['FINANCE_MAILS_EVE_LOGIN']}"
         )
         mail_info = {
             "approved_cost": 0,

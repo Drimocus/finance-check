@@ -1,3 +1,7 @@
+"""
+    called by cronjob, what schedule ?
+"""
+
 import datetime
 import os
 from typing import Optional
@@ -235,3 +239,7 @@ class Wallets:
             return request_time.strftime(JOURNAL_DATEFORMAT)
         else:
             return last_journal_date
+
+if __name__ == "__main__":
+    wallets = Wallets()
+    wallets.run()

@@ -34,6 +34,15 @@
             <input type="submit" value="Send Test Mail" onclick=testMail()>
         </span>
     </span><br><br>
+    <span id="tax_records_update_span">
+        Manual Tax Records Update (requires wallet journal data) - 
+        Year: <input id="t_u_year" type="number" value=2026>
+        Month: <input id="t_u_month" type="number" value=6>
+        
+        <span id="tax_records_update_button_span">
+            <input type="submit" value="Send Test Mail" onclick=updateTaxRecords()>
+        </span>
+    </span><br><br>
 
     <table class="list">
         {% for alliance_id in alliance_ids %}
@@ -300,12 +309,28 @@
         var m_start = new Date();
         formData.append("receiver_id", receiver_id);
         formData.append("sender_id", sender_id);
-        test_mail_span.innerHTML = 'Sending...';
+        test_mail_button_span.innerHTML = 'Sending...';
         fetch(`/tokens/test_mail`, { 
             method: 'POST', redirect: "follow", body: formData, 
         }).then(response => {
             var took = Math.round((new Date() - start)/1000);
             test_mail_button_span.innerHTML = '<input type="submit" value="Send Test Mail" onclick="testMail()">' + ' Sent (' + took + 's)';
+        });
+    }
+    function updateTaxRecords() {
+        const formData = new FormData();
+        const tax_records_update_button_span = document.getElementById("tax_records_update_button_span");
+        var year = document.getElementById("t_u_year").value;
+        var month = document.getElementById("t_u_month").value;
+        var m_start = new Date();
+        formData.append("year", receiver_id);
+        formData.append("month", sender_id);
+        tax_records_update_button_span.innerHTML = 'Sending...';
+        fetch(`/tokens/update_tax_records`, { 
+            method: 'POST', redirect: "follow", body: formData, 
+        }).then(response => {
+            var took = Math.round((new Date() - start)/1000);
+            tax_records_update_button_span.innerHTML = '<input type="submit" value="Send Test Mail" onclick=updateTaxRecords()>' + ' Updated (' + took + 's)';
         });
     }
 </script>
