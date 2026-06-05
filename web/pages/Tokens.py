@@ -13,6 +13,7 @@ from werkzeug.utils import redirect
 from werkzeug.wrappers import Response as wzResponse
 from datetime import datetime, timedelta
 
+import copy
 from wallets import Wallets
 from tax_records import TaxRecords
 
@@ -152,7 +153,7 @@ class Tokens:
             character_id=session['character_id'],
             alliance_ids=env_vars["CHECK_ALLIANCE_IDS"] + [0],
             has_token=self.__has_token,
-            corporations=self.__corporations,
+            corporations=copy.deepcopy(self.__corporations),
             month_date = prev_month_last_day
         )
 
@@ -169,7 +170,6 @@ class Tokens:
         if attribute_name == 'active' and attribute_value == '0':
             self.__set_corp_attr(corp_id, 'is_taxed', 0)
         if attribute_name == 'corporation_owner_name':
-            self.__app.logger.error(attribute_value)
             if attribute_value == "":
                 self.__set_corp_attr(corp_id, 'corporation_owner_id', None)
             else:
