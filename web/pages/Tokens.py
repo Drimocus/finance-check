@@ -160,8 +160,12 @@ class Tokens:
         if attribute_name == 'active' and attribute_value == '0':
             self.__set_corp_attr(corp_id, 'is_taxed', 0)
         if attribute_name == 'corporation_owner_name':
-            owner_id = self.__get_character_id(attribute_value)
-            self.__set_corp_attr(corp_id, 'corporation_owner_id', owner_id)
+            self.__app.logger.error(attribute_value)
+            if attribute_value == "":
+                self.__set_corp_attr(corp_id, 'corporation_owner_id', None)
+            else:
+                owner_id = self.__get_character_id(attribute_value)
+                self.__set_corp_attr(corp_id, 'corporation_owner_id', owner_id)
 
         return redirect(url_for('tokens'))
     def __set_corp_attr(
@@ -187,10 +191,10 @@ class Tokens:
         # update db data
         cursor = self.__db.cursor()
         sql = f"""
-            UPDATE corporations SET {attribute_name} = {attribute_value}
-            WHERE id = {corp_id}
+            UPDATE corporations SET {attribute_name} = %s
+            WHERE id = %s;
         """
-        cursor.execute(sql)
+        cursor.execute(sql, [attribute_value, corp_id])
         self.__db.commit()
         cursor.close()
 
