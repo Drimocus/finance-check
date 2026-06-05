@@ -74,3 +74,21 @@ table.list td.centre_cb {
 table.list td input[type=text] {
     width: 120px;
 }
+
+input[type=number].nospin {
+    -moz-appearance: textfield;
+}
+input.nospin::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input.nospin::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+input.year[type=number] {
+    width: 32px;
+}
+input.month[type=number] {
+    width: 18px;
+}

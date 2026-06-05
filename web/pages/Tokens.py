@@ -11,6 +11,7 @@ from typing import Union
 from flask import render_template, url_for, session, Flask, request
 from werkzeug.utils import redirect
 from werkzeug.wrappers import Response as wzResponse
+from datetime import datetime, timedelta
 
 from wallets import Wallets
 from tax_records import TaxRecords
@@ -93,6 +94,10 @@ class Tokens:
         corporations = cursor.fetchall()
         cursor.close()
 
+        current_date = datetime.now()
+        prev_month_end = datetime(current_date.year, current_date.month, 1)
+        prev_month_last_day = prev_month_end - timedelta(days=1)
+
         # convert into lookup dictionary for easier use
         for corp_dict in corporations:
             corp_dict["want"] = False
@@ -136,7 +141,10 @@ class Tokens:
 
         # add tax balance
         for corp_id, corp in self.__corporations.items():
-            corp["brave_tax_balance"] = self.__tax_records.get_brave_tax_balance(corp_id)
+            corp["brave_tax_balance"] = self.__tax_records.get_brave_tax_balance(
+                corp_id,
+                prev_month_last_day
+            )
 
         # render page
         return render_template(
@@ -144,7 +152,8 @@ class Tokens:
             character_id=session['character_id'],
             alliance_ids=env_vars["CHECK_ALLIANCE_IDS"] + [0],
             has_token=self.__has_token,
-            corporations=self.__corporations
+            corporations=self.__corporations,
+            month_date = prev_month_last_day
         )
 
     def set_corp_attr(
