@@ -31,11 +31,13 @@ def prepare_tax_mail(tax_record: dict, config: dict) -> tuple[str, list[dict], s
         tax_contact = config['alt_corps_tax_contact']
         tax_help_channel = config['alt_corps_tax_help_channel']
         base_tax = config['alt_corps_base_tax']
+        exempt_amount = config['alt_corps_exempt_income']
     else:
         tax_receiving_corp = config['main_corps_tax_receiving_corp']
         tax_contact = config['main_corps_tax_contact']
         tax_help_channel = config['main_corps_tax_help_channel']
         base_tax = config['main_corps_base_tax']
+        exempt_amount = config['main_corps_exempt_income']
 
     previous_balance = brave_tax_balance + brave_tax_amount - brave_tax_payments
     mail_subject = f"{tax_month_date.strftime("%B")} {tax_month_date.strftime("%Y")} Tax Report"
@@ -58,21 +60,21 @@ def prepare_tax_mail(tax_record: dict, config: dict) -> tuple[str, list[dict], s
         f"\n"
     )
     if brave_tax_balance < 0:
-        body += f"TLDR: send {brave_tax_balance*-1:,.2f} to {tax_receiving_corp}\n\n"
+        body += f"TLDR: send {brave_tax_balance*-1:,} to {tax_receiving_corp}\n\n"
     else:
-        body += f"TLDR: you already paid us {brave_tax_balance:,.2f} too much, see you next month\n\n"
+        body += f"TLDR: you already paid us {brave_tax_balance:,} too much, see you next month\n\n"
     body += (
         "---- Tax Report ----\n"
-        f"Date:              {prefix_str(f"{tax_month_date.strftime("%B")} - {tax_month_date.strftime("%Y")}", 20)}\n"
-        f"Corporation Name:{prefix_str(corporation_name, 22)}\n"
-        f"Corporation ID:  {prefix_str(str(corporation_id), 22)}\n"
-        f"Tax Income:      {prefix_str(f"{taxable_income:,.2f}", 22)} ISK\n"
-        f"Corp Tax:        {prefix_str(f"{corp_tax_amount:,.2f}", 22)} ISK\n"
-        f"Brave Tax:       {prefix_str(f"{brave_tax_amount:,.2f}", 22)} ISK\n"
-        f"Brave Tax Payments:{prefix_str(f"{brave_tax_payments:,.2f}", 20)} ISK\n"
+        f"Date:              {prefix_str(f"{tax_month_date.strftime("%B")} - {tax_month_date.strftime("%Y")}", 18)}\n"
+        f"Corporation Name:{prefix_str(corporation_name, 20)}\n"
+        f"Corporation ID:  {prefix_str(str(corporation_id), 20)}\n"
+        f"Tax Income:      {prefix_str(f"{taxable_income:,}", 20)} ISK\n"
+        f"Corp Tax:        {prefix_str(f"{corp_tax_amount:,}", 20)} ISK\n"
+        f"Brave Tax:       {prefix_str(f"{brave_tax_amount:,}", 20)} ISK\n"
+        f"Brave Tax Payments:{prefix_str(f"{brave_tax_payments:,}", 18)} ISK\n"
         f"\n"
-        f"Previous Brave Tax Balance: {prefix_str(f"{previous_balance:,.2f}", 17)} ISK\n"
-        f"Current Brave Tax Balance: " + prefix_str(f"{brave_tax_balance:,.2f}", 17) + " ISK\n"
+        f"Previous Brave Tax Balance:{prefix_str(f"{previous_balance:,}", 16)} ISK\n"
+        f"Current Brave Tax Balance:" + prefix_str(f"{brave_tax_balance:,}", 15) + " ISK\n"
         "--------------------\n"
         "\n"
         "Explanation:\n"
@@ -89,8 +91,10 @@ def prepare_tax_mail(tax_record: dict, config: dict) -> tuple[str, list[dict], s
     body += (
         f"Brave Tax: the amount of your corp's monthly tax income that should go to {tax_receiving_corp} (50%)"
     )
+    if exempt_amount > 0:
+        body += f", your first {exempt_amount:,} ISK of tax income was free from brave taxes."
     if base_tax > 0:
-        body += f", also includes the {base_tax:,.2f} ISK base tax for {('alt' if is_alt_corp else 'main')} corps.\n"
+        body += f" This includes the {base_tax:,} ISK base tax for {('alt' if is_alt_corp else 'main')} corps.\n"
     else:
         body += ".\n"
     body += (
