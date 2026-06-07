@@ -3,7 +3,7 @@
 """
 
 import logging
-import os, sys
+import os, sys, time
 import json
 import mysql.connector
 import requests
@@ -212,9 +212,16 @@ class TaxRecords:
 
     def get_brave_tax_balance(
         self,
-        corporation_id: int
+        corporation_id: int,
+        tax_month: Union[datetime, None] = None
+        # up to specific date
     ) -> int | None:
         """get brave tax balance for a corporation from db"""
+        if tax_month is not None:
+            max_date = tax_month.strftime(JOURNAL_DATEFORMAT)
+            sql_filter = f"AND tax_month_date <= '{max_date}'"
+        else:
+            sql_filter = ""
         db_cursor = self.__db.cursor(dictionary=True)
         db_cursor.execute(
             f'''
@@ -222,7 +229,8 @@ class TaxRecords:
                     brave_tax_amount, 
                     brave_tax_payments
                 FROM tax_records 
-                WHERE corporation_id = {corporation_id};
+                WHERE corporation_id = {corporation_id}
+                {sql_filter};
             '''
         )
         t_records = db_cursor.fetchall()
@@ -258,16 +266,16 @@ class TaxRecords:
             date_min=tax_month_start,
             date_max=tax_month_end
         )
-        taxable_income = sum([entry['amount'] for entry in tax_entries])
+        taxable_income = sum(entry['amount'] for entry in tax_entries)
 
         if is_alt_corp:
             base_tax = config['alt_corps_base_tax']
             tax_receiving_corp = config['alt_corps_tax_receiving_corp']
-            taxable_income = max(0, taxable_income - config['alt_corps_exempt_income'])
+            tax_exempt_income = config['alt_corps_exempt_income']
         else:
             base_tax = config['main_corps_base_tax']
             tax_receiving_corp = config['main_corps_tax_receiving_corp']
-            taxable_income = max(0, taxable_income - config['main_corps_exempt_income'])
+            tax_exempt_income = config['main_corps_exempt_income']
 
         payment_entries = self.select_corporation_wallet_journal(
             corporation_id,
@@ -279,7 +287,7 @@ class TaxRecords:
 
         brave_tax_payments = sum(entry['amount'] for entry in payment_entries) * -1
         corp_tax_amount = int(taxable_income/2)
-        brave_tax_amount = taxable_income - corp_tax_amount + base_tax
+        brave_tax_amount = max(0, int(taxable_income/2) - tax_exempt_income) + base_tax
 
         tax_record = {
             "corporation_id": corporation_id,
@@ -312,38 +320,47 @@ class TaxRecords:
                 tax_month_records.append(month_record)
         return tax_month_records
 
-    def run(self):
+    def send_tax_evemails(self, balance_threshold: Union[int, None] = None):
+        """Send tax reminders to every corp under the threshold."""
         # set up some dates for last month
         current_date = datetime.now()
         tax_month_end = datetime(current_date.year, current_date.month, 1)
         tax_month_last_day = tax_month_end - timedelta(days=1)
 
+        self.logger.info(
+            (
+                "checking taxes, current date: %s, "
+                "checking tax for month: %s-%s, "
+                "threshold for evemails: %s"
+             ),
+            current_date,
+            tax_month_last_day.year,
+            tax_month_last_day.month,
+            balance_threshold
+        )
+
         month_records = self.update_tax_records(
             tax_month_last_day.year,
             tax_month_last_day.month
         )
-
-        self.logger.info(
-            "checking taxes, current date: %s, checking tax for month: %s-%s",
-            current_date,
-            tax_month_last_day.year,
-            tax_month_last_day.month
-        )
         for record in month_records:
-            is_alt_corp = record["is_alt_corp"]
-            if (
-                (is_alt_corp and config["evemail_alt_corps"]) or
-                (not is_alt_corp and config["evemail_main_corps"])
-            ):
-                body, recipients, mail_subject = prepare_tax_mail(record, config)
-                post_tax_mail(
-                    env_vars["FINANCE_NEUCORE_KEY"],
-                    self.evemail_endpoint,
-                    recipients,
-                    body,
-                    mail_subject,
-                )
+            record["brave_tax_balance"] = self.get_brave_tax_balance(
+                record["corporation_id"],
+                tax_month_last_day
+            )
+            if balance_threshold is not None and record["brave_tax_balance"] > balance_threshold:
+                continue
+            body, recipients, mail_subject = prepare_tax_mail(record, config)
+            if record["corporation_name"] != "Second Sons":
+                continue
+            post_tax_mail(
+                env_vars["FINANCE_NEUCORE_KEY"],
+                self.evemail_endpoint,
+                recipients,
+                body,
+                mail_subject,
+            )
 
 if __name__ == "__main__":
     tax_records = TaxRecords()
-    tax_records.run()
+    tax_records.send_tax_evemails()

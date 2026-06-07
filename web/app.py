@@ -34,6 +34,16 @@ def update_ceos() -> wzResponse:
 def update_wallets() -> wzResponse:
     return Tokens(app).update_wallets()
 
+@app.route('/tokens/show_starting_balance_editor', methods=['POST'])
+def show_starting_balance_editor() -> wzResponse:
+    return Tokens(app).show_starting_balance_editor()
+@app.route('/tokens/set_starting_balance', methods=['POST'])
+def set_starting_balance() -> wzResponse:
+    return Tokens(app).set_starting_balance()
+@app.route('/tokens/show_owner_editor', methods=['POST'])
+def show_owner_editor() -> wzResponse:
+    return Tokens(app).show_owner_editor()
+
 @app.route('/tokens/update_tax_records', methods=['POST'])
 def update_tax_records() -> wzResponse:
     return Tokens(app).update_tax_records()
@@ -41,6 +51,9 @@ def update_tax_records() -> wzResponse:
 @app.route('/tokens/test_mail', methods=['POST'])
 def test_mail() -> wzResponse:
     return Tokens(app).test_mail()
+@app.route('/tokens/tax_evemails', methods=['POST'])
+def tax_evemails() -> wzResponse:
+    return Tokens(app).tax_evemails()
 
 @app.route('/auth/login')
 def auth_login() -> str:

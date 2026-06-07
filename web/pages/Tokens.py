@@ -17,6 +17,25 @@ import copy
 from wallets import Wallets
 from tax_records import TaxRecords
 
+def read_json_file(filename, mode='r', encoding="utf-8") -> dict:
+    with open(file=filename, mode=mode, encoding=encoding) as file:
+        return json.load(file)
+def write_json_file(
+    contents,
+    filename,
+    create_dirs=True,
+    mode='w',
+    encoding="utf-8"
+):
+    if mode == 'wb':
+        encoding=None
+    # ensure directory for file exists if not creating in current directory
+    dirname = os.path.dirname(filename)
+    if (create_dirs and dirname != ''):
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+    with open(file=filename, mode=mode, encoding=encoding) as file:
+        json.dump(contents, file, indent=4)
+
 env_vars = {
     'DB_HOST' : os.getenv('DB_HOST'),
     'DB_PORT' : os.getenv('DB_PORT', '3306'),
@@ -53,6 +72,7 @@ class Tokens:
         self.__auth_header = {'Authorization': 'Bearer ' + env_vars['FINANCE_NEUCORE_KEY']}
         self.__wallets = Wallets()
         self.__tax_records = TaxRecords()
+        self.__config = read_json_file("../config/tax_check_config.json")
 
         self.__check_env_vars()
 
@@ -146,6 +166,10 @@ class Tokens:
                 corp_id,
                 prev_month_last_day
             )
+            corp["starting_balance"] = self.__tax_records.get_brave_tax_balance(
+                corp_id,
+                datetime(year = 1, month = 1, day = 1)
+            )
 
         # render page
         return render_template(
@@ -154,13 +178,64 @@ class Tokens:
             alliance_ids=env_vars["CHECK_ALLIANCE_IDS"] + [0],
             has_token=self.__has_token,
             corporations=copy.deepcopy(self.__corporations),
-            month_date = prev_month_last_day
+            month_date = prev_month_last_day,
+            show_starting_balance_editor = session.get("show_starting_balance_editor", True),
+            show_owner_editor = session.get("show_owner_editor", True)
         )
+
+    def show_starting_balance_editor(
+        self,
+    ) -> wzResponse:
+        """route to toggle starting balance editor visibility"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
+        status = request.form.get('status')
+        session["show_starting_balance_editor"] = status == "1"
+        return redirect(url_for('tokens'))
+    def set_starting_balance(
+        self,
+    ) -> wzResponse:
+        """route to set a specific corp attribute to a new value"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
+
+        corp_id = request.form.get('corporation_id')
+        try:
+            corp_id = int(corp_id)
+        except ValueError as e:
+            self.__app.logger.error(e)
+
+        starting_balance = int(request.form.get('starting_balance'))
+        self.__corporations[corp_id]['starting_balance'] = starting_balance
+        self.__tax_records.insert_tax_record(
+            {
+                "corporation_id": corp_id,
+                "tax_month_date": datetime(year=1, month=1, day=1),
+                "taxable_income": 0,
+                "corp_tax_amount": 0,
+                "brave_tax_amount": 0,
+                "brave_tax_payments": starting_balance
+            }
+        )
+        return redirect(url_for('tokens'))
+
+    def show_owner_editor(
+        self,
+    ) -> wzResponse:
+        """route to toggle owner editor visibility"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
+        status = request.form.get('status')
+        session["show_owner_editor"] = status == "1"
+        return redirect(url_for('tokens'))
 
     def set_corp_attr(
         self,
     ) -> wzResponse:
         """route to set a specific corp attribute to a new value"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
+
         corp_id = request.form.get('corporation_id')
         attribute_name = request.form.get('attribute_name')
         attribute_value = request.form.get('attribute_value')
@@ -288,6 +363,8 @@ class Tokens:
 
     def update_ceos(self) -> wzResponse:
         """Route for updating all CEOs, can take a while"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
         self.__update_ceos(missing_only=False, limit=None)
         self.__update_corporations_table()
         return redirect(url_for('tokens'))
@@ -378,18 +455,37 @@ class Tokens:
 
     def update_wallets(self) -> wzResponse:
         """update database wallet_journals"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
         self.__wallets.run()
         return redirect(url_for('tokens'))
 
     def update_tax_records(self) -> wzResponse:
         """update database wallet_journals"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
         year = int(request.form.get('year'))
         month = int(request.form.get('month'))
         self.__tax_records.update_tax_records(year, month)
         return redirect(url_for('tokens'))
 
+    def tax_evemails(self, balance_threshold: Union[int, None] = None) -> wzResponse:
+        """Send tax reminders to every corp"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
+        threshold_str = request.form.get('threshold', None)
+        if threshold_str is not None:
+            try:
+                balance_threshold = int(threshold_str)
+            except ValueError:
+                return redirect(url_for('tokens'))
+        self.__tax_records.send_tax_evemails(balance_threshold)
+        return redirect(url_for('tokens'))
+
     def test_mail(self) -> wzResponse:
         """send a test mail"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
         receiver_id = int(request.form.get('receiver_id'))
         sender_id = int(request.form.get('sender_id'))
         recipients=[{

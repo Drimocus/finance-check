@@ -6,9 +6,11 @@
     <h3>Corporation Overview</h3>
     <dl>
         <dt>Token columns:</dt>
-        <dt>Last Journal</dt><dd>The last time the wallet data for this corporation was successfully updated. Wallet data can only be updated with a configured, still valid, active key. </dd>
-        <dd>You can force a wallet data update here, This may take several minutes: <span id="wallet_status"><input type="submit" value="Update All Wallet Journals" onclick=updateWallets()></span></dd>
+        <dt>Configured - Character ID</dt><dd> The current token selected for the corp, this one will be used to try and get wallet data.</dd>
+        <dt>Last Journal</dt><dd>The last time the wallet data for this corporation was successfully updated. Wallet data can only be updated with a configured, still valid, active key. ESI only keeps wallet data of the last 30 days, so it is not possible to fix older missed data. </dd>
         <dt>Active</dt><dd>Controls wallet journal updates, if disabled the corporations wallets will not be tracked. Tax reports require wallet data, if disabled the corp will also stop receiving tax reports.</dd>
+        <dt>Available - Character ID</dt><dd>Available tokens for the corp, currently selected one is mentioned, use select button action to switch.</dd>
+        <dt>Last Checked</dt><dd>Last time the token was checked valid.</dd>
     </dl>
     <dl>
         <dt>Tax Data columns:</dt>
@@ -24,9 +26,31 @@
             <dd>If negative: The total tax the corp still owes Brave</dd>
             <dd>If positive: The amount by which the corporation still has overpaid it's tax</dd>
         </dl>
+        <dt>Edit Starting Balance</dt>
+        <dd>Allows a manual plus or minus amount for the total balance. Useful for corps that had an tax debt or overpayment left from the previous system. Also useful in case a future edit is needed due to mistakes or update failures.</dd>
     </dl>
+    <br>
+    Force wallet journal update, may take several minutes:
+    <span id="wallet_status">
+        <input type="submit" value="Update All Wallet Journals" onclick=updateWallets()>
+    </span>
+    <br>
+    Assumption is that this is already done ~2x a month by cronjob, button is here for manul testing.
+    <br>
+    <br>
+    <span id="tax_records_update_span">
+        Tax Records Update -
+        Year: <input id="t_u_year" class="nospin year" type="number" value={{ month_date.year }}>
+        Month: <input id="t_u_month" class="nospin month" type="number" value={{ month_date.month }} min="1" max="12">
+        
+        <span id="tax_records_update_button_span">
+            <input type="submit" value="Update Tax Records" onclick=updateTaxRecords()>
+        </span>
+        <br>
+        Requires wallet journal data, button is here for manual testing, assumption is that this is done 1x per month by cronjob.
+    </span><br><br>
     <span id="test_mail_span">
-        Finance Test Mail - 
+        Finance Test EVEMail - 
         Sender ID: <input id="sender_id" class="nospin" type="number" value=0>
         Receiver ID: <input id="receiver_id" class="nospin" type="number" value=0>
         
@@ -34,13 +58,18 @@
             <input type="submit" value="Send Test Mail" onclick=testMail()>
         </span>
     </span><br><br>
-    <span id="tax_records_update_span">
-        Tax Records Update (requires wallet journal data) - 
-        Year: <input id="t_u_year" class="nospin year" type="number" value={{ month_date.year }}>
-        Month: <input id="t_u_month" class="nospin month" type="number" value={{ month_date.month }} min="1" max="12">
+    <span id="mail_reminder_span">
+        Tax reminder EVEMail - Send tax evemails for the previous month to every taxed corp who's balance is below the specified amount.<br>
+        Tax Balance Threshold: <input id="tax_r_thresh" class="nospin isk_amount" type="number" value=-100000000 onchange=verifyTaxRThresh(this.value) title="must be negative">
         
-        <span id="tax_records_update_button_span">
-            <input type="submit" value="Update Tax Records" onclick=updateTaxRecords()>
+        <span id="tax_reminder_button_span">
+            <input type="submit" value="Send Tax Reminders" onclick=sendTaxR()>
+        </span>
+    </span><br><br>
+    <span id="tax_mails_span">
+        Tax EVEMail - Send tax evemails for the previous month to every taxed corp :
+        <span id="tax_mails_button_span">
+            <input type="submit" value="Send Tax EVEMails" onclick=sendTaxM()>
         </span>
     </span><br><br>
 
@@ -48,7 +77,7 @@
         {% for alliance_id in alliance_ids %}
             <thead>
                 <tr>
-                    <th colspan="14">
+                    <th colspan="{{ 13 + show_owner_editor + show_starting_balance_editor }}">
                         {% if loop.index > 1 %}<br>{% endif %}
                         <h4>
                             {% if alliance_id %}
@@ -65,7 +94,19 @@
                     <th colspan="2">WANT</th>
                     <th colspan="3">CONFIGURED</th>
                     <th colspan="3">AVAILABLE (valid tokens only)</th>
-                    <th colspan="6">TAX DATA</th>
+                    <th colspan="{{ 5 + show_owner_editor + show_starting_balance_editor }}">
+                        TAX DATA<br>
+                        {% if show_owner_editor %}
+                            <input type="submit" value="Hide Owner Editor" onclick=showOwnerEditor(0)>
+                        {% else %}
+                            <input type="submit" value="Show Owner Editor" onclick=showOwnerEditor(1)>
+                        {% endif %}
+                        {% if show_starting_balance_editor %}
+                            <input type="submit" value="Hide Starting Balance Editor" onclick=showStartingBalanceEditor(0)>
+                        {% else %}
+                            <input type="submit" value="Show Starting Balance Editor" onclick=showStartingBalanceEditor(1)>
+                        {% endif %}
+                    </th>
                 </tr>
                 <tr>
                     <td>ID</td>
@@ -81,10 +122,15 @@
 
                     <td>CEO</td>
                     <td>Owner</td>
+                    {% if show_owner_editor %}
                     <td>Edit Owner</td>
+                    {% endif %}
                     <td>Alt Corp?</td>
                     <td>Taxed?</td>
                     <td>Tax Balance {{ month_date.year }}-{{ month_date.month }}</td>
+                    {% if show_starting_balance_editor %}
+                    <td>Edit Starting Balance</td>
+                    {% endif %}
                 </tr>
             </thead>
             <tbody>
@@ -150,9 +196,11 @@
                             <a href="https://evewho.com/character/{{ corp.corporation_owner_id }}" target="_blank"
                                    rel="noopener noreferrer" title="EveWho">{{ corp.corporation_owner_name }}</a>
                         </td>
+                        {% if show_owner_editor %}
                         <td>
                             <input type="text" value="{{ corp.corporation_owner_name }}" min="0" onchange="setCorpAttr({{ corp_id }}, 'corporation_owner_name', this.value)">
                         </td>
+                        {% endif %}
                         <td class="centre_cb">
                             {% if corp.is_alt_corp %}
                                 <input type="checkbox" onchange="setCorpAttr({{ corp_id }}, 'is_alt_corp', 0)" checked>
@@ -172,6 +220,11 @@
                                 {{ "{:,} ISK".format(corp.brave_tax_balance) }}
                             {% endif %}
                         </td>
+                        {% if show_starting_balance_editor %}
+                        <td>
+                            <input type="number" class="nospin isk_amount" value="{{ corp.starting_balance }}" onchange="setStartingBalance({{ corp_id }}, this.value)">
+                        </td>
+                        {% endif %}
                     </tr>
                 {% endif %}
                 {% endfor %}
@@ -268,6 +321,71 @@
             location.reload();
             // could update page with javascript instead of reload
             // would be much faster / smoother for user, dont need waitblock
+        });
+    }
+    function verifyTaxRThresh(threshold) {
+        const tax_r_thresh_input = document.getElementById("tax_r_thresh")
+        if (threshold > 0) {
+            tax_r_thresh_input.value = -100000000
+        }
+    }
+    function sendTaxR() {
+        const tax_r_thresh_input = document.getElementById("tax_r_thresh")
+        const tax_reminder_button_span = document.getElementById("tax_reminder_button_span")
+        var start = new Date();
+        const formData = new FormData();
+        formData.append("threshold", tax_r_thresh_input.value);
+        tax_reminder_button_span.innerHTML = "Sending Tax Reminders...";
+        fetch(`/tokens/tax_evemails`, { 
+            method: 'POST', redirect: "follow", body: formData, 
+        }).then(response => {
+            var took = Math.round((new Date() - start)/1000);
+            tax_reminder_button_span.innerHTML = '<input type="submit" value="Send Tax Reminders" onclick=sendTaxR()> Finished (' + took + 's)';
+        });
+    }
+    function sendTaxM() {
+        const tax_mails_button_span = document.getElementById("tax_mails_button_span")
+        var start = new Date();
+        const formData = new FormData();
+        tax_mails_button_span.innerHTML = "Sending Tax EVEMails...";
+        fetch(`/tokens/tax_evemails`, { 
+            method: 'POST', redirect: "follow", body: formData, 
+        }).then(response => {
+            var took = Math.round((new Date() - start)/1000);
+            tax_mails_button_span.innerHTML = '<input type="submit" value="Send Tax EVEMails" onclick=sendTaxM()> Finished (' + took + 's)';
+        });
+    }
+    function setStartingBalance(corporation_id, starting_balance) {
+        const formData = new FormData();
+        formData.append("corporation_id", corporation_id);
+        formData.append("starting_balance", starting_balance);
+        showWaitBlock();
+        fetch(`/tokens/set_starting_balance`, { 
+            method: 'POST', redirect: 'follow', body: formData, 
+        }).then(response => {
+            location.reload();
+            // could update page with javascript instead of reload
+            // would be much faster / smoother for user, dont need waitblock
+        });
+    }
+    function showStartingBalanceEditor(status) {
+        const formData = new FormData();
+        formData.append("status", status);
+        showWaitBlock();
+        fetch(`/tokens/show_starting_balance_editor`, { 
+            method: 'POST', redirect: 'follow', body: formData, 
+        }).then(response => {
+            location.reload();
+        });
+    }
+    function showOwnerEditor(status) {
+        const formData = new FormData();
+        formData.append("status", status);
+        showWaitBlock();
+        fetch(`/tokens/show_owner_editor`, { 
+            method: 'POST', redirect: 'follow', body: formData, 
+        }).then(response => {
+            location.reload();
         });
     }
 
