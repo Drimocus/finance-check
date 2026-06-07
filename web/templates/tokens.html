@@ -4,75 +4,6 @@
 
 <div class="tokens">
     <h3>Corporation Overview</h3>
-    <dl>
-        <dt>Token columns:</dt>
-        <dt>Configured - Character ID</dt><dd> The current token selected for the corp, this one will be used to try and get wallet data.</dd>
-        <dt>Last Journal</dt><dd>The last time the wallet data for this corporation was successfully updated. Wallet data can only be updated with a configured, still valid, active key. ESI only keeps wallet data of the last 30 days, so it is not possible to fix older missed data. </dd>
-        <dt>Active</dt><dd>Controls wallet journal updates, if disabled the corporations wallets will not be tracked. Tax reports require wallet data, if disabled the corp will also stop receiving tax reports.</dd>
-        <dt>Available - Character ID</dt><dd>Available tokens for the corp, currently selected one is mentioned, use select button action to switch.</dd>
-        <dt>Last Checked</dt><dd>Last time the token was checked valid.</dd>
-    </dl>
-    <dl>
-        <dt>Tax Data columns:</dt>
-        <dl>
-            <dt>CEO</dt>
-                <dd>Automatically updated through ESI for new corporations, the CEO character always receives ingame tax report evemails.</dd>
-                <dd>You can update all CEOs here, but this may take a minute: <span id="ceo_status"><input type="submit" value="Update All CEOs" onclick=updateCEOS()></span></dd>
-            <dt>Owner</dt><dd>Optional main contact character in case it is different from the ingame CEO, like with alt or holding corps/characters. If set this character will also receive ingame tax report evemails.</dd>
-            <dt>Edit Owner</dt><dd>Edit this to update optional owner of the corp, value should be a character name. Owner column will update if successful, check the result there.</dd>
-        <dt>Alt Corp</dt><dd>Whether or not the corp is an alt corp for someone, this affects which tax rules are applied. You can toggle the checkbox to update. [might change to a corp type selection in future if we need more options (main, alt, anti coup, hauler, holding, executor w/e)]</dd>
-        <dt>Taxed</dt><dd>Controls if tax is applied to the corporation. If enabled the corp gets tax balance updates and the ceo / owner receives ingame tax report evemails</dd>
-        <dt>Tax Balance</dt>
-            <dd>If negative: The total tax the corp still owes Brave</dd>
-            <dd>If positive: The amount by which the corporation still has overpaid it's tax</dd>
-        </dl>
-        <dt>Edit Starting Balance</dt>
-        <dd>Allows a manual plus or minus amount for the total balance. Useful for corps that had an tax debt or overpayment left from the previous system. Also useful in case a future edit is needed due to mistakes or update failures.</dd>
-    </dl>
-    <br>
-    Force wallet journal update, may take several minutes:
-    <span id="wallet_status">
-        <input type="submit" value="Update All Wallet Journals" onclick=updateWallets()>
-    </span>
-    <br>
-    Assumption is that this is already done ~2x a month by cronjob, button is here for manul testing.
-    <br>
-    <br>
-    <span id="tax_records_update_span">
-        Tax Records Update -
-        Year: <input id="t_u_year" class="nospin year" type="number" value={{ month_date.year }}>
-        Month: <input id="t_u_month" class="nospin month" type="number" value={{ month_date.month }} min="1" max="12">
-        
-        <span id="tax_records_update_button_span">
-            <input type="submit" value="Update Tax Records" onclick=updateTaxRecords()>
-        </span>
-        <br>
-        Requires wallet journal data, button is here for manual testing, assumption is that this is done 1x per month by cronjob.
-    </span><br><br>
-    <span id="test_mail_span">
-        Finance Test EVEMail - 
-        Sender ID: <input id="sender_id" class="nospin" type="number" value=0>
-        Receiver ID: <input id="receiver_id" class="nospin" type="number" value=0>
-        
-        <span id="test_mail_button_span">
-            <input type="submit" value="Send Test Mail" onclick=testMail()>
-        </span>
-    </span><br><br>
-    <span id="mail_reminder_span">
-        Tax reminder EVEMail - Send tax evemails for the previous month to every taxed corp who's balance is below the specified amount.<br>
-        Tax Balance Threshold: <input id="tax_r_thresh" class="nospin isk_amount" type="number" value=-100000000 onchange=verifyTaxRThresh(this.value) title="must be negative">
-        
-        <span id="tax_reminder_button_span">
-            <input type="submit" value="Send Tax Reminders" onclick=sendTaxR()>
-        </span>
-    </span><br><br>
-    <span id="tax_mails_span">
-        Tax EVEMail - Send tax evemails for the previous month to every taxed corp :
-        <span id="tax_mails_button_span">
-            <input type="submit" value="Send Tax EVEMails" onclick=sendTaxM()>
-        </span>
-    </span><br><br>
-
     <table class="list">
         {% for alliance_id in alliance_ids %}
             <thead>
@@ -306,9 +237,122 @@
         {% endfor %}
     </table>
 
+    <h1>Explanation of each column fields </h1>
+    <dl>
+        <dt>Token columns:</dt>
+        <dt>Configured - Character ID</dt><dd> The current token selected for the corp, this one will be used to try and get wallet data.</dd>
+        <dt>Last Journal</dt><dd>The last time the wallet data for this corporation was successfully updated. Wallet data can only be updated with a configured, still valid, active key. ESI only keeps wallet data of the last 30 days, so it is not possible to fix older missed data. </dd>
+        <dt>Active</dt><dd>Controls wallet journal updates, if disabled the corporations wallets will not be tracked. Tax reports require wallet data, if disabled the corp will also stop receiving tax reports.</dd>
+        <dt>Available - Character ID</dt><dd>Available tokens for the corp, currently selected one is mentioned, use select button action to switch.</dd>
+        <dt>Last Checked</dt><dd>Last time the token was checked valid.</dd>
+    </dl>
+    <dl>
+        <dt>Tax Data columns:</dt>
+        <dl>
+            <dt>CEO</dt>
+                <dd>Automatically updated through ESI for new corporations, the CEO character always receives ingame tax report evemails.</dd>
+                <dd>You can update all CEOs here, but this may take a minute: <span id="ceo_status"><input type="submit" value="Update All CEOs" onclick=updateCEOS()></span></dd>
+            <dt>Owner</dt><dd>Optional main contact character in case it is different from the ingame CEO, like with alt or holding corps/characters. If set this character will also receive ingame tax report evemails.</dd>
+            <dt>Edit Owner</dt><dd>Edit this to update optional owner of the corp, value should be a character name. Owner column will update if successful, check the result there.</dd>
+        <dt>Alt Corp</dt><dd>Whether or not the corp is an alt corp for someone, this affects which tax rules are applied. You can toggle the checkbox to update. [might change to a corp type selection in future if we need more options (main, alt, anti coup, hauler, holding, executor w/e)]</dd>
+        <dt>Taxed</dt><dd>Controls if tax is applied to the corporation. If enabled the corp gets tax balance updates and the ceo / owner receives ingame tax report evemails</dd>
+        <dt>Tax Balance</dt>
+            <dd>If negative: The total tax the corp still owes Brave</dd>
+            <dd>If positive: The amount by which the corporation still has overpaid it's tax</dd>
+        </dl>
+        <dt>Edit Starting Balance</dt>
+        <dd>Allows a manual plus or minus amount for the total balance. Useful for corps that had an tax debt or overpayment left from the previous system. Also useful in case a future edit is needed due to mistakes or update failures.</dd>
+    </dl>
+    <br>
+    <h1>Test Buttons - (with very real evemails, dont spam the wrong one) </h1>
+    Force wallet journal update, may take several minutes:
+    <span id="wallet_status">
+        <input type="submit" value="Update All Wallet Journals" onclick=updateWallets()>
+    </span>
+    <br>
+    Assumption is that this is already done ~2x a month by cronjob, button is here for manul testing.
+    <br>
+    <br>
+    <span id="tax_records_update_span">
+        Tax Records Update -
+        Year: <input id="t_u_year" class="nospin year" type="number" value={{ month_date.year }}>
+        Month: <input id="t_u_month" class="nospin month" type="number" value={{ month_date.month }} min="1" max="12">
+        
+        <span id="tax_records_update_button_span">
+            <input type="submit" value="Update Tax Records" onclick=updateTaxRecords()>
+        </span>
+        <br>
+        Requires wallet journal data, button is here for manual testing, assumption is that this is done 1x per month by cronjob.
+    </span><br><br>
+    <span id="test_mail_span">
+        Test EVEMail - to check if neucore eve login token with evemail scope works.<br>
+        Sender ID: <input id="sender_id" class="nospin" type="number" value=0>
+        Receiver ID: <input id="receiver_id" class="nospin" type="number" value=0>
+        
+        <span id="test_mail_button_span">
+            <input type="submit" value="Send Test Mail" onclick=testMail()>
+        </span>
+    </span><br><br>
+    <span>
+        EVEMail Specific Corp Tax Report - 
+        Corp ID: <input id="ctm_corp_id" class="nospin" type="number" value=0>
+        
+        <span id="ctm_mail_button_span">
+            <input type="submit" value="Send Tax Mail" onclick=sendTaxCorp()>
+        </span>
+    </span><br><br>
+    <span>
+        Tax EVEMails if balance low - Send tax evemails for the previous month to <em>every</em> taxed corp who's balance is below the specified amount.<br>
+        Tax Balance Threshold: <input id="tax_r_thresh" class="nospin isk_amount" type="number" value=-100000000 onchange=verifyTaxRThresh(this.value) title="must be negative">
+        
+        <span id="tax_reminder_button_span">
+            <input type="submit" value="Send Tax Reminders" onclick=sendTaxR()>
+        </span>
+    </span><br><br>
+    <span>
+        Tax EVEMails - Send tax evemails for the previous month to <em>every</em> taxed corp :
+        <span id="tax_mails_button_span">
+            <input type="submit" value="Send Tax EVEMails" onclick=sendTaxM()>
+        </span>
+    </span><br><br>
+    <h1>Tax Settings </h1>
+    alt_corps_base_tax: <input class="nospin isk_amount" type="number" value={{ config.alt_corps_base_tax }} onchange="setConfig('alt_corps_base_tax', this.value)"><br>
+    alt_corps_exempt_income: <input class="nospin isk_amount" type="number" value={{ config.alt_corps_exempt_income }} onchange="setConfig('alt_corps_exempt_income', this.value)"><br>
+    alt_corps_tax_receiving_corp: <input class="" type="text" value="{{ config.alt_corps_tax_receiving_corp }}" onchange="setConfig('alt_corps_tax_receiving_corp', this.value)"><br>
+    alt_corps_tax_contact: <input class="" type="text" value="{{ config.alt_corps_tax_contact }}" onchange="setConfig('alt_corps_tax_contact', this.value)"><br>
+    alt_corps_tax_help_channel: <input class="" type="text" value="{{ config.alt_corps_tax_help_channel }}" onchange="setConfig('alt_corps_tax_help_channel', this.value)"><br>
+    <br>
+    main_corps_base_tax: <input class="nospin isk_amount" type="number" value={{ config.main_corps_base_tax }} onchange="setConfig('main_corps_base_tax', this.value)"><br>
+    main_corps_exempt_income: <input class="nospin isk_amount" type="number" value={{ config.main_corps_exempt_income }} onchange="setConfig('main_corps_exempt_income', this.value)"><br>
+    main_corps_tax_receiving_corp: <input class="" type="text" value="{{ config.main_corps_tax_receiving_corp }}" onchange="setConfig('main_corps_tax_receiving_corp', this.value)"><br>
+    main_corps_tax_contact: <input class="" type="text" value="{{ config.main_corps_tax_contact }}" onchange="setConfig('main_corps_tax_contact', this.value)"><br>
+    main_corps_tax_help_channel: <input class="" type="text" value="{{ config.main_corps_tax_help_channel }}" onchange="setConfig('main_corps_tax_help_channel', this.value)"><br>
+    <br>
+    taxed_ref_types: <br>
+        {% for ref_type, enabled in config.taxed_ref_types.items() %}
+            {% if enabled %}
+            <input type="checkbox" onchange="setConfig('{{ ref_type }}', 0)" checked> - {{ref_type}}<br>
+            {% else %}
+            <input type="checkbox" onchange="setConfig('{{ ref_type }}', 1)" > - {{ref_type}}<br>
+            {% endif %}
+        {% endfor %}
+
 </div>
 
 <script type="text/javascript">
+    function setConfig(attribute_name, attribute_value) {
+        const formData = new FormData();
+        formData.append("attribute_name", attribute_name);
+        formData.append("attribute_value", attribute_value);
+        showWaitBlock();
+        fetch(`/tokens/set_config`, { 
+            method: 'POST', redirect: 'follow', body: formData, 
+        }).then(response => {
+            location.reload();
+            // could update page with javascript instead of reload
+            // would be much faster / smoother for user, dont need waitblock
+        });
+    }
     function setCorpAttr(corporation_id, attribute_name, attribute_value) {
         const formData = new FormData();
         formData.append("corporation_id", corporation_id);
@@ -353,6 +397,21 @@
         }).then(response => {
             var took = Math.round((new Date() - start)/1000);
             tax_mails_button_span.innerHTML = '<input type="submit" value="Send Tax EVEMails" onclick=sendTaxM()> Finished (' + took + 's)';
+        });
+    }
+
+    function sendTaxCorp() {
+        const ctm_corp_id = document.getElementById("ctm_corp_id")
+        const ctm_mail_button_span = document.getElementById("ctm_mail_button_span")
+        var start = new Date();
+        const formData = new FormData();
+        formData.append("corporation_id", ctm_corp_id.value);
+        ctm_mail_button_span.innerHTML = "Sending Tax EVEMail...";
+        fetch(`/tokens/tax_evemail`, { 
+            method: 'POST', redirect: "follow", body: formData, 
+        }).then(response => {
+            var took = Math.round((new Date() - start)/1000);
+            ctm_mail_button_span.innerHTML = '<input type="submit" value="Send Tax Mail" onclick=sendTaxCorp()> Sent (' + took + 's)';
         });
     }
     function setStartingBalance(corporation_id, starting_balance) {

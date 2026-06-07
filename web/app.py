@@ -25,6 +25,9 @@ def tokens() -> Union[str, wzResponse]:
 @app.route('/tokens/set_corp_attr', methods=['POST'])
 def set_corp_attr() -> wzResponse:
     return Tokens(app).set_corp_attr()
+@app.route('/tokens/set_config', methods=['POST'])
+def set_config() -> wzResponse:
+    return Tokens(app).set_config()
 
 @app.route('/tokens/update_ceos', methods=['POST'])
 def update_ceos() -> wzResponse:
@@ -51,6 +54,9 @@ def update_tax_records() -> wzResponse:
 @app.route('/tokens/test_mail', methods=['POST'])
 def test_mail() -> wzResponse:
     return Tokens(app).test_mail()
+@app.route('/tokens/tax_evemail', methods=['POST'])
+def tax_evemail() -> wzResponse:
+    return Tokens(app).tax_evemail()
 @app.route('/tokens/tax_evemails', methods=['POST'])
 def tax_evemails() -> wzResponse:
     return Tokens(app).tax_evemails()

@@ -14,7 +14,6 @@ from typing import Union
 def __read_json_file(filename, mode='r', encoding="utf-8") -> dict:
     with open(file=filename, mode=mode, encoding=encoding) as file:
         return json.load(file)
-config = __read_json_file("../config/tax_check_config.json")
 
 JOURNAL_DATEFORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -42,13 +41,17 @@ def sql_list_format(values: list) -> str:
 
 class TaxRecords:
 
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-        logging.basicConfig(
-            filename=f'{__name__}.log',
-            encoding='utf-8',
-            level=os.getenv('UWSGI_LOG_LEVEL', 'ERROR').upper()
-        )
+    def __init__(self, config: dict, logger = None):
+        self.__config = config
+        if logger is None:
+            self.logger = logging.getLogger(__name__)
+            logging.basicConfig(
+                filename=f'{__name__}.log',
+                encoding='utf-8',
+                level=os.getenv('UWSGI_LOG_LEVEL', 'ERROR').upper()
+            )
+        else:
+            self.logger = logger
         self.__check_env_vars()
 
         finance_mails_char_id = self.__check_mailer_token()
@@ -152,7 +155,7 @@ class TaxRecords:
         db_cursor.execute(
             f'''
                 SELECT *
-                FROM {config["wallet_journal_table_name"]}
+                FROM {self.__config["wallet_journal_table_name"]}
                 {row_filter}
             '''
         )
@@ -162,13 +165,26 @@ class TaxRecords:
             return []
         return res
 
-    def select_taxable_corps(self) -> list[dict]:
-        """select taxed, active corps"""
+    def select_taxable_corp(self, corporation_id: int) -> dict:
+        """select specific taxed, active corp"""
         db_cursor = self.__db.cursor(dictionary=True)
         db_cursor.execute(
             f'''
                 SELECT id, corporation_name, character_id, is_alt_corp, corporation_ceo_id, corporation_owner_id
-                FROM {config["corp_info_table_name"]}
+                FROM {self.__config["corp_info_table_name"]}
+                WHERE active = 1 and is_taxed = 1 and id = {corporation_id};
+            '''
+        )
+        res = db_cursor.fetchone()
+        db_cursor.close()
+        return res
+    def select_taxable_corps(self) -> list[dict]:
+        """select all taxed, active corps"""
+        db_cursor = self.__db.cursor(dictionary=True)
+        db_cursor.execute(
+            f'''
+                SELECT id, corporation_name, character_id, is_alt_corp, corporation_ceo_id, corporation_owner_id
+                FROM {self.__config["corp_info_table_name"]}
                 WHERE active = 1 and is_taxed = 1;
             '''
         )
@@ -259,23 +275,26 @@ class TaxRecords:
         corporation_ceo_id = corporation["corporation_ceo_id"]
         corporation_owner_id = corporation["corporation_owner_id"]
 
+        ref_types = self.__config["taxed_ref_types"]
+        enabled_ref_types = [x for x in ref_types if ref_types[x]]
+
         tax_entries = self.select_corporation_wallet_journal(
             corporation_id,
             divisions=[1],
-            ref_types=config["taxed_ref_types"],
+            ref_types=enabled_ref_types,
             date_min=tax_month_start,
             date_max=tax_month_end
         )
         taxable_income = sum(entry['amount'] for entry in tax_entries)
 
         if is_alt_corp:
-            base_tax = config['alt_corps_base_tax']
-            tax_receiving_corp = config['alt_corps_tax_receiving_corp']
-            tax_exempt_income = config['alt_corps_exempt_income']
+            base_tax = self.__config['alt_corps_base_tax']
+            tax_receiving_corp = self.__config['alt_corps_tax_receiving_corp']
+            tax_exempt_income = self.__config['alt_corps_exempt_income']
         else:
-            base_tax = config['main_corps_base_tax']
-            tax_receiving_corp = config['main_corps_tax_receiving_corp']
-            tax_exempt_income = config['main_corps_exempt_income']
+            base_tax = self.__config['main_corps_base_tax']
+            tax_receiving_corp = self.__config['main_corps_tax_receiving_corp']
+            tax_exempt_income = self.__config['main_corps_exempt_income']
 
         payment_entries = self.select_corporation_wallet_journal(
             corporation_id,
@@ -320,6 +339,43 @@ class TaxRecords:
                 tax_month_records.append(month_record)
         return tax_month_records
 
+    def send_tax_evemail(self, corporation_id: int):
+        """Send tax reminders to every corp under the threshold."""
+        # set up some dates for last month
+        current_date = datetime.now()
+        tax_month_end = datetime(current_date.year, current_date.month, 1)
+        tax_month_last_day = tax_month_end - timedelta(days=1)
+
+        self.logger.info(
+            (
+                "checking taxes, current date: %s, "
+                "checking tax for month: %s-%s, "
+                "corporation checked: %s"
+             ),
+            current_date,
+            tax_month_last_day.year,
+            tax_month_last_day.month,
+            corporation_id
+        )
+
+        record = self.update_tax_record(
+            self.select_taxable_corp(corporation_id),
+            tax_month_last_day.year,
+            tax_month_last_day.month
+        )
+        record["brave_tax_balance"] = self.get_brave_tax_balance(
+            record["corporation_id"],
+            tax_month_last_day
+        )
+        body, recipients, mail_subject = prepare_tax_mail(record, self.__config)
+        post_tax_mail(
+            env_vars["FINANCE_NEUCORE_KEY"],
+            self.evemail_endpoint,
+            recipients,
+            body,
+            mail_subject,
+        )
+
     def send_tax_evemails(self, balance_threshold: Union[int, None] = None):
         """Send tax reminders to every corp under the threshold."""
         # set up some dates for last month
@@ -350,7 +406,7 @@ class TaxRecords:
             )
             if balance_threshold is not None and record["brave_tax_balance"] > balance_threshold:
                 continue
-            body, recipients, mail_subject = prepare_tax_mail(record, config)
+            body, recipients, mail_subject = prepare_tax_mail(record, self.__config)
             if record["corporation_name"] != "Second Sons":
                 continue
             post_tax_mail(
@@ -360,7 +416,9 @@ class TaxRecords:
                 body,
                 mail_subject,
             )
+            time.sleep(13)
 
 if __name__ == "__main__":
-    tax_records = TaxRecords()
+    tax_config = __read_json_file("../config/tax_check_config.json")
+    tax_records = TaxRecords(tax_config)
     tax_records.send_tax_evemails()

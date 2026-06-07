@@ -17,6 +17,8 @@ import copy
 from wallets import Wallets
 from tax_records import TaxRecords
 
+CONFIG_FILENAME = "../config/tax_check_config.json"
+
 def read_json_file(filename, mode='r', encoding="utf-8") -> dict:
     with open(file=filename, mode=mode, encoding=encoding) as file:
         return json.load(file)
@@ -71,8 +73,8 @@ class Tokens:
         self.__app = app
         self.__auth_header = {'Authorization': 'Bearer ' + env_vars['FINANCE_NEUCORE_KEY']}
         self.__wallets = Wallets()
-        self.__tax_records = TaxRecords()
         self.__config = read_json_file("../config/tax_check_config.json")
+        self.__tax_records = TaxRecords(self.__config, logger=self.__app.logger)
 
         self.__check_env_vars()
 
@@ -180,7 +182,8 @@ class Tokens:
             corporations=copy.deepcopy(self.__corporations),
             month_date = prev_month_last_day,
             show_starting_balance_editor = session.get("show_starting_balance_editor", True),
-            show_owner_editor = session.get("show_owner_editor", True)
+            show_owner_editor = session.get("show_owner_editor", True),
+            config=copy.deepcopy(self.__config)
         )
 
     def show_starting_balance_editor(
@@ -229,6 +232,37 @@ class Tokens:
         session["show_owner_editor"] = status == "1"
         return redirect(url_for('tokens'))
 
+    def set_config(
+        self,
+    ) -> wzResponse:
+        """route to set a specific corp attribute to a new value"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
+
+        attribute_name = request.form.get('attribute_name')
+        attribute_value = request.form.get('attribute_value')
+        if attribute_name in [
+            "alt_corps_base_tax",
+            "alt_corps_exempt_income",
+            "main_corps_base_tax",
+            "main_corps_exempt_income",
+        ]:
+            self.__config[attribute_name] = int(attribute_value)
+        elif attribute_name in [
+            "bounty_prizes",
+            "ess_escrow_transfer",
+            "project_discovery_reward",
+            "agent_mission_reward",
+            "agent_mission_time_bonus_reward",
+            "daily_goal_payouts",
+            "freelance_jobs_reward"
+        ]:
+            self.__config["taxed_ref_types"][attribute_name] = bool(int(attribute_value))
+        else:
+            self.__config[attribute_name] = attribute_value
+        write_json_file(self.__config, CONFIG_FILENAME)
+        return redirect(url_for('tokens'))
+
     def set_corp_attr(
         self,
     ) -> wzResponse:
@@ -239,10 +273,19 @@ class Tokens:
         corp_id = request.form.get('corporation_id')
         attribute_name = request.form.get('attribute_name')
         attribute_value = request.form.get('attribute_value')
+
+        if attribute_name in [
+            "active",
+            "character_id",
+            "is_alt_corp",
+            "is_taxed"
+        ]:
+            attribute_value = int(attribute_value)
+
         self.__set_corp_attr(corp_id, attribute_name, attribute_value)
 
         # triggers related change
-        if attribute_name == 'active' and attribute_value == '0':
+        if attribute_name == 'active' and attribute_value == 0:
             self.__set_corp_attr(corp_id, 'is_taxed', 0)
         if attribute_name == 'corporation_owner_name':
             if attribute_value == "":
@@ -467,6 +510,14 @@ class Tokens:
         year = int(request.form.get('year'))
         month = int(request.form.get('month'))
         self.__tax_records.update_tax_records(year, month)
+        return redirect(url_for('tokens'))
+
+    def tax_evemail(self) -> wzResponse:
+        """Send tax mail to one specific corp"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
+        corporation_id = int(request.form.get('corporation_id'))
+        self.__tax_records.send_tax_evemail(corporation_id)
         return redirect(url_for('tokens'))
 
     def tax_evemails(self, balance_threshold: Union[int, None] = None) -> wzResponse:

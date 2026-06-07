@@ -27,13 +27,16 @@ JOURNAL_DATEFORMAT = "%Y-%m-%d %H:%M:%S"
 
 class Wallets:
 
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-        logging.basicConfig(
-            filename=f'{__name__}.log',
-            encoding='utf-8',
-            level=os.getenv('UWSGI_LOG_LEVEL', 'ERROR').upper()
-        )
+    def __init__(self, logger = None):
+        if logger is None:
+            self.logger = logging.getLogger(__name__)
+            logging.basicConfig(
+                filename=f'{__name__}.log',
+                encoding='utf-8',
+                level=os.getenv('UWSGI_LOG_LEVEL', 'ERROR').upper()
+            )
+        else:
+            self.logger = logger
         self.__auth_header = {'Authorization': 'Bearer ' + env_vars['FINANCE_NEUCORE_KEY']}
 
         self.__check_env_vars()

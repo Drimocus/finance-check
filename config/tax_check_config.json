@@ -10,15 +10,14 @@
     "alt_corps_tax_contact": "Yondu Quill",
     "main_corps_tax_contact": "Yondu Quill",
     "alt_corps_tax_help_channel": "#brave-united-officers",
-    "main_corps_tax_help_channel": "#lobby ping for bread",
-    "taxed_ref_types": [
-        "bounty_prizes",
-        "ess_escrow_transfer",
-        "project_discovery_reward",
-        "agent_mission_reward",
-        "agent_mission_time_bonus_reward",
-        "daily_goal_payouts",
-        "freelance_jobs_reward"
-    ]
-
+    "main_corps_tax_help_channel": "#lobby-ping-for-bread",
+    "taxed_ref_types": {
+        "bounty_prizes": true,
+        "ess_escrow_transfer": true,
+        "project_discovery_reward": true,
+        "agent_mission_reward": true,
+        "agent_mission_time_bonus_reward": true,
+        "daily_goal_payouts": true,
+        "freelance_jobs_reward": true
+    },
 }
