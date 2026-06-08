@@ -11,10 +11,26 @@ from datetime import datetime, timedelta
 from tax_mails import prepare_tax_mail, post_tax_mail
 from typing import Union
 
-def __read_json_file(filename, mode='r', encoding="utf-8") -> dict:
+def read_json_file(filename, mode='r', encoding="utf-8") -> dict:
     with open(file=filename, mode=mode, encoding=encoding) as file:
         return json.load(file)
+def write_json_file(
+    contents,
+    filename,
+    create_dirs=True,
+    mode='w',
+    encoding="utf-8"
+):
+    if mode == 'wb':
+        encoding=None
+    # ensure directory for file exists if not creating in current directory
+    dirname = os.path.dirname(filename)
+    if (create_dirs and dirname != ''):
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+    with open(file=filename, mode=mode, encoding=encoding) as file:
+        json.dump(contents, file, indent=4)
 
+CONFIG_FILENAME = "../config/tax_check_config.json"
 JOURNAL_DATEFORMAT = "%Y-%m-%d %H:%M:%S"
 
 env_vars = {
@@ -340,7 +356,7 @@ class TaxRecords:
         return tax_month_records
 
     def send_tax_evemail(self, corporation_id: int):
-        """Send tax reminders to every corp under the threshold."""
+        """Send tax evemail to a specific corp."""
         # set up some dates for last month
         current_date = datetime.now()
         tax_month_end = datetime(current_date.year, current_date.month, 1)
@@ -376,24 +392,25 @@ class TaxRecords:
             mail_subject,
         )
 
-    def send_tax_evemails(self, balance_threshold: Union[int, None] = None):
-        """Send tax reminders to every corp under the threshold."""
+    def send_tax_evemails(
+        self,
+        balance_threshold: Union[int, None] = None,
+        web_called = False
+    ):
+        """
+            - Update tax records of taxable corps for the previous month.
+            - Send tax evemails to every taxeable corp for that month.
+            - Waits 13 seconds inbetween evemails to satisfy ccp rate limit.
+
+            Respects the low balance threshold for evemails if provided.
+
+            This can be used through the web app if you set the timeout long
+            enough, but that's a bit for fun, the intention is a cronjob.
+        """
         # set up some dates for last month
         current_date = datetime.now()
         tax_month_end = datetime(current_date.year, current_date.month, 1)
         tax_month_last_day = tax_month_end - timedelta(days=1)
-
-        self.logger.info(
-            (
-                "checking taxes, current date: %s, "
-                "checking tax for month: %s-%s, "
-                "threshold for evemails: %s"
-             ),
-            current_date,
-            tax_month_last_day.year,
-            tax_month_last_day.month,
-            balance_threshold
-        )
 
         month_records = self.update_tax_records(
             tax_month_last_day.year,
@@ -404,11 +421,45 @@ class TaxRecords:
                 record["corporation_id"],
                 tax_month_last_day
             )
-            if balance_threshold is not None and record["brave_tax_balance"] > balance_threshold:
-                continue
+        if balance_threshold is not None:
+            month_records = [
+                record for record in month_records if
+                record["brave_tax_balance"] > balance_threshold
+            ]
+
+        self.logger.info(
+            (
+                "checking taxes, current date: %s, "
+                "checking tax for month: %s-%s, "
+                "threshold for evemails: %s, "
+                "%s corporations to mail"
+             ),
+            current_date,
+            tax_month_last_day.year,
+            tax_month_last_day.month,
+            balance_threshold,
+            len(month_records)
+        )
+        if web_called:
+            self.__config['total_mails'] = len(month_records)
+            self.__config['mailing'] = True
+            self.__config['mail_progress'] = 0
+            self.__config['mail_start'] = current_date.strftime(JOURNAL_DATEFORMAT)
+            write_json_file(self.__config, CONFIG_FILENAME)
+
+        for record in month_records:
+            if web_called:
+                self.__config = read_json_file(CONFIG_FILENAME)
+                if self.__config.get('mailing', True) is False:
+                    self.logger.error('mailing task cancelled by web client.')
+                    self.__config['mail_cancelled'] = datetime.now().strftime(JOURNAL_DATEFORMAT)
+                    write_json_file(self.__config, CONFIG_FILENAME)
+                    return
             body, recipients, mail_subject = prepare_tax_mail(record, self.__config)
-            if record["corporation_name"] != "Second Sons":
-                continue
+            if web_called:
+                self.__config['mail_progress'] += 1
+                write_json_file(self.__config, CONFIG_FILENAME)
+            time.sleep(13)
             post_tax_mail(
                 env_vars["FINANCE_NEUCORE_KEY"],
                 self.evemail_endpoint,
@@ -416,9 +467,11 @@ class TaxRecords:
                 body,
                 mail_subject,
             )
-            time.sleep(13)
+        if web_called:
+            self.__config['total_mails'] = 0
+            write_json_file(self.__config, CONFIG_FILENAME)
 
 if __name__ == "__main__":
-    tax_config = __read_json_file("../config/tax_check_config.json")
+    tax_config = read_json_file(CONFIG_FILENAME)
     tax_records = TaxRecords(tax_config)
     tax_records.send_tax_evemails()

@@ -60,6 +60,9 @@ def tax_evemail() -> wzResponse:
 @app.route('/tokens/tax_evemails', methods=['POST'])
 def tax_evemails() -> wzResponse:
     return Tokens(app).tax_evemails()
+@app.route('/tokens/cancel_evemails', methods=['POST'])
+def cancel_evemails() -> wzResponse:
+    return Tokens(app).cancel_evemails()
 
 @app.route('/auth/login')
 def auth_login() -> str:

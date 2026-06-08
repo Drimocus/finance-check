@@ -284,6 +284,13 @@
         <br>
         Requires wallet journal data, button is here for manual testing, assumption is that this is done 1x per month by cronjob.
     </span><br><br>
+    {% if config.get('mailing', False) %}
+        EVE Mailing in progress... {{config.get('mail_progress', 0)}} / {{config.total_mails}} Corporations mailed, started at {{config.get('mail_start', '??')}}<br>
+        Mail Buttons disabled until this task has finished, refresh page to see progress. Or cancel the current mail task: 
+        <span id="cancel_mail_button_span">
+            <input type="submit" value="Cancel EVEMails" onclick=cancelMails()>
+        </span>
+    {% else %}
     <span id="test_mail_span">
         Test EVEMail - to check if neucore eve login token with evemail scope works.<br>
         Sender ID: <input id="sender_id" class="nospin" type="number" value=0>
@@ -302,7 +309,7 @@
         </span>
     </span><br><br>
     <span>
-        Tax EVEMails if balance low - Send tax evemails for the previous month to <em>every</em> taxed corp who's balance is below the specified amount.<br>
+        Tax EVEMails if balance low - Send tax evemails for the previous month to every taxed corp who's balance is below the specified amount.<br>
         Tax Balance Threshold: <input id="tax_r_thresh" class="nospin isk_amount" type="number" value=-100000000 onchange=verifyTaxRThresh(this.value) title="must be negative">
         
         <span id="tax_reminder_button_span">
@@ -310,10 +317,11 @@
         </span>
     </span><br><br>
     <span>
-        Tax EVEMails - Send tax evemails for the previous month to <em>every</em> taxed corp :
+        Tax EVEMails - Send tax evemails for the previous month to every taxed corp :
         <span id="tax_mails_button_span">
             <input type="submit" value="Send Tax EVEMails" onclick=sendTaxM()>
         </span>
+    {% endif %}
     </span><br><br>
     <h1>Tax Settings </h1>
     alt_corps_base_tax: <input class="nospin isk_amount" type="number" value={{ config.alt_corps_base_tax }} onchange="setConfig('alt_corps_base_tax', this.value)"><br>
@@ -340,6 +348,8 @@
 </div>
 
 <script type="text/javascript">
+    var confirmed_t_r = false;
+    var confirmed_t_m = false;
     function setConfig(attribute_name, attribute_value) {
         const formData = new FormData();
         formData.append("attribute_name", attribute_name);
@@ -368,41 +378,56 @@
         });
     }
     function verifyTaxRThresh(threshold) {
-        const tax_r_thresh_input = document.getElementById("tax_r_thresh")
+        const tax_r_thresh_input = document.getElementById("tax_r_thresh");
         if (threshold > 0) {
-            tax_r_thresh_input.value = -100000000
+            tax_r_thresh_input.value = -100000000;
         }
     }
     function sendTaxR() {
-        const tax_r_thresh_input = document.getElementById("tax_r_thresh")
-        const tax_reminder_button_span = document.getElementById("tax_reminder_button_span")
+        const tax_reminder_button_span = document.getElementById("tax_reminder_button_span");
+        if (!(confirmed_t_r)) {
+            tax_reminder_button_span.innerHTML = 'You are about to evemail up to {{ corporations|length }} corporations, are you sure? <input type="submit" value="Confirm" onclick=sendTaxR()>';
+            confirmed_t_r = true;
+            return;
+        }
+        confirmed_t_r = false;
+        const tax_r_thresh_input = document.getElementById("tax_r_thresh");
         var start = new Date();
         const formData = new FormData();
         formData.append("threshold", tax_r_thresh_input.value);
-        tax_reminder_button_span.innerHTML = "Sending Tax Reminders...";
+        tax_reminder_button_span.innerHTML = "Sending Tax Reminders... refresh to see progress";
         fetch(`/tokens/tax_evemails`, { 
             method: 'POST', redirect: "follow", body: formData, 
-        }).then(response => {
-            var took = Math.round((new Date() - start)/1000);
-            tax_reminder_button_span.innerHTML = '<input type="submit" value="Send Tax Reminders" onclick=sendTaxR()> Finished (' + took + 's)';
         });
     }
     function sendTaxM() {
-        const tax_mails_button_span = document.getElementById("tax_mails_button_span")
+        const tax_mails_button_span = document.getElementById("tax_mails_button_span");
+        if (!(confirmed_t_m)) {
+            tax_mails_button_span.innerHTML = 'You are about to evemail up to {{ corporations|length }} corporations, are you sure? <input type="submit" value="Confirm" onclick=sendTaxM()>';
+            confirmed_t_m = true;
+            return;
+        }
+        confirmed_t_m = false;
         var start = new Date();
         const formData = new FormData();
-        tax_mails_button_span.innerHTML = "Sending Tax EVEMails...";
+        tax_mails_button_span.innerHTML = "Sending Tax EVEMails... refresh to see progress.";
         fetch(`/tokens/tax_evemails`, { 
             method: 'POST', redirect: "follow", body: formData, 
+        });
+    }
+    function cancelMails() {
+        showWaitBlock();
+        const formData = new FormData();
+        fetch(`/tokens/cancel_evemails`, { 
+            method: 'POST', redirect: "follow", body: formData, 
         }).then(response => {
-            var took = Math.round((new Date() - start)/1000);
-            tax_mails_button_span.innerHTML = '<input type="submit" value="Send Tax EVEMails" onclick=sendTaxM()> Finished (' + took + 's)';
+            location.reload(true);
         });
     }
 
     function sendTaxCorp() {
-        const ctm_corp_id = document.getElementById("ctm_corp_id")
-        const ctm_mail_button_span = document.getElementById("ctm_mail_button_span")
+        const ctm_corp_id = document.getElementById("ctm_corp_id");
+        const ctm_mail_button_span = document.getElementById("ctm_mail_button_span");
         var start = new Date();
         const formData = new FormData();
         formData.append("corporation_id", ctm_corp_id.value);

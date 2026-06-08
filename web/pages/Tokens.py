@@ -530,7 +530,15 @@ class Tokens:
                 balance_threshold = int(threshold_str)
             except ValueError:
                 return redirect(url_for('tokens'))
-        self.__tax_records.send_tax_evemails(balance_threshold)
+        self.__tax_records.send_tax_evemails(balance_threshold, web_called=True)
+        return redirect(url_for('tokens'))
+
+    def cancel_evemails(self) -> wzResponse:
+        """Cancel a current mailing task if any"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
+        self.__config['mailing'] = False
+        write_json_file(self.__config, CONFIG_FILENAME)
         return redirect(url_for('tokens'))
 
     def test_mail(self) -> wzResponse:
