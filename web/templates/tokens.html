@@ -271,7 +271,7 @@
     - tax_records.py - run on 2nd of month, no risk of missed data on failure, can rerun at any point in future. Also sends evemails.<br>
     Multi-Mail test buttons have a confirmation step, rate limmits are respected with naive sleeps. Might end early if uwsgi timeout / harakiri is reached before all mails can be sent. <br><br>
 
-    Force wallet journal update, may take several minutes:
+    Force wallet journal update, should take about a minute per configured corp:
     <span id="wallet_status">
         <input type="submit" value="Update All Wallet Journals" onclick=updateWallets()>
     </span>
