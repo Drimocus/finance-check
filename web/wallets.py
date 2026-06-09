@@ -3,7 +3,7 @@
 """
 
 import datetime
-import os
+import os, time
 from typing import Optional
 
 import mysql.connector
@@ -29,9 +29,9 @@ class Wallets:
 
     def __init__(self, logger = None):
         if logger is None:
-            self.logger = logging.getLogger(__name__)
+            self.logger = logging.getLogger('wallets')
             logging.basicConfig(
-                filename=f'{__name__}.log',
+                filename='wallets.log',
                 encoding='utf-8',
                 level=os.getenv('UWSGI_LOG_LEVEL', 'ERROR').upper()
             )
@@ -92,6 +92,8 @@ class Wallets:
                 # preserve journal date logic for division 1
                 if division == 1:
                     last_journal_date = div_journal_date
+                # rate lim: 300 tokens / 15m, 200ok=2 tokens, 10/min, ~6 per
+                time.sleep(7)
             if last_journal_date:
                 self.logger.info('Read corporation %s wallet: Success.', corporation_id)
                 cursor = self.__db.cursor()
@@ -124,7 +126,7 @@ class Wallets:
                 url, r.status_code, r.reason, r.text
             )
             if r.status_code != 403 and retry < 2:
-                self.logger.error('retrying (%s) ...', retry + 1)
+                self.logger.warning('retrying (%s) ...', retry + 1)
                 return self.__read_wallet(
                     corporation_id,
                     character_id,

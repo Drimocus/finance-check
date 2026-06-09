@@ -60,9 +60,9 @@ class TaxRecords:
     def __init__(self, config: dict, logger = None):
         self.__config = config
         if logger is None:
-            self.logger = logging.getLogger(__name__)
+            self.logger = logging.getLogger('tax_records')
             logging.basicConfig(
-                filename=f'{__name__}.log',
+                filename='tax_records.log',
                 encoding='utf-8',
                 level=os.getenv('UWSGI_LOG_LEVEL', 'ERROR').upper()
             )
@@ -459,6 +459,7 @@ class TaxRecords:
             if web_called:
                 self.__config['mail_progress'] += 1
                 write_json_file(self.__config, CONFIG_FILENAME)
+            # internal rate lim: 5/min, ~13s sleep
             time.sleep(13)
             post_tax_mail(
                 env_vars["FINANCE_NEUCORE_KEY"],

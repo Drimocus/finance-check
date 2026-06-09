@@ -72,8 +72,8 @@ class Tokens:
     def __init__(self, app: Flask):
         self.__app = app
         self.__auth_header = {'Authorization': 'Bearer ' + env_vars['FINANCE_NEUCORE_KEY']}
-        self.__wallets = Wallets()
         self.__config = read_json_file("../config/tax_check_config.json")
+        self.__wallets = Wallets(logger=self.__app.logger)
         self.__tax_records = TaxRecords(self.__config, logger=self.__app.logger)
 
         self.__check_env_vars()
@@ -524,6 +524,8 @@ class Tokens:
         """Send tax reminders to every corp"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
+        if self.__config.get("mailing", False) is True:
+            return redirect(url_for('tokens'))
         threshold_str = request.form.get('threshold', None)
         if threshold_str is not None:
             try:

@@ -241,7 +241,7 @@
     <dl>
         <dt>Token columns:</dt>
         <dt>Configured - Character ID</dt><dd> The current token selected for the corp, this one will be used to try and get wallet data.</dd>
-        <dt>Last Journal</dt><dd>The last time the wallet data for this corporation was successfully updated. Wallet data can only be updated with a configured, still valid, active key. ESI only keeps wallet data of the last 30 days, so it is not possible to fix older missed data. </dd>
+        <dt>Last Journal</dt><dd>The last known wallet transaction of this corporation. Wallet data can only be updated with a configured, still valid, active key. ESI only keeps wallet data of the last 30 days, so it is not possible to fix older missed data. </dd>
         <dt>Active</dt><dd>Controls wallet journal updates, if disabled the corporations wallets will not be tracked. Tax reports require wallet data, if disabled the corp will also stop receiving tax reports.</dd>
         <dt>Available - Character ID</dt><dd>Available tokens for the corp, currently selected one is mentioned, use select button action to switch.</dd>
         <dt>Last Checked</dt><dd>Last time the token was checked valid.</dd>
@@ -265,24 +265,26 @@
     </dl>
     <br>
     <h1>Test Buttons - (with very real evemails, dont spam the wrong one) </h1>
+    Remove this section in production, it is not intended for regular use.<br>
+    Wallet Journal Updates, and Tax record Update + EVEMails should be cronjobbed. <br>
+    - wallets.py - run on 1st, 10th, and 20th of month? (1 fail acceptable) <br>
+    - tax_records.py - run on 2nd of month, no risk of missed data on failure, can rerun at any point in future. Also sends evemails.<br>
+    Multi-Mail test buttons have a confirmation step, rate limmits are respected with naive sleeps. Might end early if uwsgi timeout / harakiri is reached before all mails can be sent. <br><br>
+
     Force wallet journal update, may take several minutes:
     <span id="wallet_status">
         <input type="submit" value="Update All Wallet Journals" onclick=updateWallets()>
     </span>
     <br>
-    Assumption is that this is already done ~2x a month by cronjob, button is here for manul testing.
-    <br>
     <br>
     <span id="tax_records_update_span">
-        Tax Records Update -
+        Tax Records Update (Requires wallet journal data)
         Year: <input id="t_u_year" class="nospin year" type="number" value={{ month_date.year }}>
         Month: <input id="t_u_month" class="nospin month" type="number" value={{ month_date.month }} min="1" max="12">
         
         <span id="tax_records_update_button_span">
             <input type="submit" value="Update Tax Records" onclick=updateTaxRecords()>
         </span>
-        <br>
-        Requires wallet journal data, button is here for manual testing, assumption is that this is done 1x per month by cronjob.
     </span><br><br>
     {% if config.get('mailing', False) %}
         EVE Mailing in progress... {{config.get('mail_progress', 0)}} / {{config.total_mails}} Corporations mailed, started at {{config.get('mail_start', '??')}}<br>
@@ -385,6 +387,7 @@
     }
     function sendTaxR() {
         const tax_reminder_button_span = document.getElementById("tax_reminder_button_span");
+        const tax_mails_button_span = document.getElementById("tax_mails_button_span");
         if (!(confirmed_t_r)) {
             tax_reminder_button_span.innerHTML = 'You are about to evemail up to {{ corporations|length }} corporations, are you sure? <input type="submit" value="Confirm" onclick=sendTaxR()>';
             confirmed_t_r = true;
@@ -396,11 +399,13 @@
         const formData = new FormData();
         formData.append("threshold", tax_r_thresh_input.value);
         tax_reminder_button_span.innerHTML = "Sending Tax Reminders... refresh to see progress";
+        tax_mails_button_span.innerHTML = "Sending Tax EVEMails... refresh to see progress.";
         fetch(`/tokens/tax_evemails`, { 
             method: 'POST', redirect: "follow", body: formData, 
         });
     }
     function sendTaxM() {
+        const tax_reminder_button_span = document.getElementById("tax_reminder_button_span");
         const tax_mails_button_span = document.getElementById("tax_mails_button_span");
         if (!(confirmed_t_m)) {
             tax_mails_button_span.innerHTML = 'You are about to evemail up to {{ corporations|length }} corporations, are you sure? <input type="submit" value="Confirm" onclick=sendTaxM()>';
@@ -410,6 +415,7 @@
         confirmed_t_m = false;
         var start = new Date();
         const formData = new FormData();
+        tax_reminder_button_span.innerHTML = "Sending Tax Reminders... refresh to see progress";
         tax_mails_button_span.innerHTML = "Sending Tax EVEMails... refresh to see progress.";
         fetch(`/tokens/tax_evemails`, { 
             method: 'POST', redirect: "follow", body: formData, 
