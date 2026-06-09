@@ -8,12 +8,11 @@ import mysql.connector
 import requests
 import json
 from typing import Union
-from flask import render_template, url_for, session, Flask, request
+from flask import render_template, g, url_for, session, Flask, request
 from werkzeug.utils import redirect
 from werkzeug.wrappers import Response as wzResponse
 from datetime import datetime, timedelta
 
-import copy
 from wallets import Wallets
 from tax_records import TaxRecords
 
@@ -67,8 +66,6 @@ class Tokens:
     """
     __available_tokens = []
 
-    __corporations = {}
-
     def __init__(self, app: Flask):
         self.__app = app
         self.__auth_header = {'Authorization': 'Bearer ' + env_vars['FINANCE_NEUCORE_KEY']}
@@ -85,6 +82,27 @@ class Tokens:
             password=env_vars['DB_PASSWORD'],
             database=env_vars['DB_DATABASE'],
         )
+        current_date = datetime.now()
+        prev_month_end = datetime(current_date.year, current_date.month, 1)
+        g.prev_month_last_day = prev_month_end - timedelta(days=1)
+
+        g.corporations = self.__load_corporations()
+        # update ceo's and names
+        self.__update_ceos()
+        self.__update_names()
+        self.__update_owner_names()
+        self.__load_token_info()
+        self.__load_tax_balance()
+
+        # update database with new corp info
+        self.__update_corporations_table()
+
+        # sort dict by corp name for readable webpage
+        g.corporations = dict(sorted(
+            g.corporations.items(),
+            key=lambda item: item[1]["corporation_name"]
+        ))
+
 
     def __check_env_vars(self):
         for key in env_vars.values():
@@ -105,47 +123,7 @@ class Tokens:
             ]
         else:
             env_vars['CHECK_CORPORATION_IDS'] = []
-
-    def show(self) -> Union[str,wzResponse]:
-        """Tokens page"""
-        if 'character_id' not in session:
-            return redirect(url_for('auth_login'))
-
-        # start with database corporations
-        cursor = self.__db.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM corporations;")
-        corporations = cursor.fetchall()
-        cursor.close()
-
-        current_date = datetime.now()
-        prev_month_end = datetime(current_date.year, current_date.month, 1)
-        prev_month_last_day = prev_month_end - timedelta(days=1)
-
-        # convert into lookup dictionary for easier use
-        for corp_dict in corporations:
-            corp_dict["want"] = False
-            self.__corporations[corp_dict["id"]] = corp_dict
-
-        # check / add wanted alliances & corps in env vars
-        for alliance_id in env_vars['CHECK_ALLIANCE_IDS']:
-            self.__fetch_alliance_corporations(alliance_id)
-        self.__add_new_corporations(env_vars['CHECK_CORPORATION_IDS'])
-
-        # update ceo's and names
-        self.__update_ceos()
-        self.__update_names()
-        self.__update_owner_names()
-
-        # update database with new corp info
-        self.__update_corporations_table()
-
-        # sort dict by corp name for readable webpage
-        self.__corporations = dict(sorted(
-            self.__corporations.items(),
-            key=lambda item: item[1]["corporation_name"]
-        ))
-
-        # add token info
+    def __load_token_info(self):
         token_data_url = (
             f'{env_vars["NEUCORE_V1_BASE_URL"]}/eve-login/'
             f'{env_vars['FINANCE_EVE_LOGIN']}/token-data'
@@ -155,23 +133,45 @@ class Tokens:
             self.__available_tokens = response.json()
         else:
             self.__app.logger.error(response.content)
-        for corp_id in self.__corporations:
+        for corp_id in g.corporations:
             tokens = []
             for token in self.__available_tokens:
                 if token['corporationId'] == corp_id:
                     tokens.append(token)
-            self.__corporations[corp_id]["tokens"] = tokens
+            g.corporations[corp_id]["tokens"] = tokens
+    def __load_corporations(self) -> dict:
+        # start with database corporations
+        cursor = self.__db.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM corporations;")
+        corporations = cursor.fetchall()
+        cursor.close()
 
-        # add tax balance
-        for corp_id, corp in self.__corporations.items():
+        # convert into lookup dictionary for easier use
+        corporations_lookup = {}
+        for corp_dict in corporations:
+            corp_dict["is_want"] = False
+            corporations_lookup[corp_dict["id"]] = corp_dict
+
+        for alliance_id in env_vars['CHECK_ALLIANCE_IDS']:
+            self.__fetch_alliance_corporations(alliance_id, corporations_lookup)
+        self.__add_new_corporations(env_vars['CHECK_CORPORATION_IDS'], corporations_lookup)
+
+        return corporations_lookup
+    def __load_tax_balance(self):
+        for corp_id, corp in g.corporations.items():
             corp["brave_tax_balance"] = self.__tax_records.get_brave_tax_balance(
                 corp_id,
-                prev_month_last_day
+                g.prev_month_last_day
             )
             corp["starting_balance"] = self.__tax_records.get_brave_tax_balance(
                 corp_id,
                 datetime(year = 1, month = 1, day = 1)
             )
+
+    def show(self) -> Union[str,wzResponse]:
+        """Tokens page"""
+        if 'character_id' not in session:
+            return redirect(url_for('auth_login'))
 
         # render page
         return render_template(
@@ -179,37 +179,35 @@ class Tokens:
             character_id=session['character_id'],
             alliance_ids=env_vars["CHECK_ALLIANCE_IDS"] + [0],
             has_token=self.__has_token,
-            corporations=copy.deepcopy(self.__corporations),
-            month_date = prev_month_last_day,
+            corporations=g.corporations,
+            month_date = g.prev_month_last_day,
             show_starting_balance_editor = session.get("show_starting_balance_editor", True),
             show_owner_editor = session.get("show_owner_editor", True),
-            config=copy.deepcopy(self.__config)
+            config=self.__config
         )
 
     def show_starting_balance_editor(
         self,
-    ) -> wzResponse:
+    ) -> Union[str,wzResponse]:
         """route to toggle starting balance editor visibility"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
         status = request.form.get('status')
         session["show_starting_balance_editor"] = status == "1"
-        return redirect(url_for('tokens'))
+        return self.show()
     def set_starting_balance(
         self,
-    ) -> wzResponse:
+    ) -> Union[str,wzResponse]:
         """route to set a specific corp attribute to a new value"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
 
-        corp_id = request.form.get('corporation_id')
         try:
-            corp_id = int(corp_id)
+            corp_id = int(request.form.get('corporation_id'))
+            starting_balance = int(request.form.get('starting_balance'))
         except ValueError as e:
             self.__app.logger.error(e)
 
-        starting_balance = int(request.form.get('starting_balance'))
-        self.__corporations[corp_id]['starting_balance'] = starting_balance
         self.__tax_records.insert_tax_record(
             {
                 "corporation_id": corp_id,
@@ -220,17 +218,18 @@ class Tokens:
                 "brave_tax_payments": starting_balance
             }
         )
-        return redirect(url_for('tokens'))
+        self.__load_tax_balance()
+        return self.show()
 
     def show_owner_editor(
         self,
-    ) -> wzResponse:
+    ) -> Union[str,wzResponse]:
         """route to toggle owner editor visibility"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
         status = request.form.get('status')
         session["show_owner_editor"] = status == "1"
-        return redirect(url_for('tokens'))
+        return self.show()
 
     def set_config(
         self,
@@ -265,7 +264,7 @@ class Tokens:
 
     def set_corp_attr(
         self,
-    ) -> wzResponse:
+    ) -> Union[str,wzResponse]:
         """route to set a specific corp attribute to a new value"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
@@ -294,7 +293,7 @@ class Tokens:
                 owner_id = self.__get_character_id(attribute_value)
                 self.__set_corp_attr(corp_id, 'corporation_owner_id', owner_id)
 
-        return redirect(url_for('tokens'))
+        return self.show()
     def __set_corp_attr(
         self,
         corp_id,
@@ -305,8 +304,7 @@ class Tokens:
             corp_id = int(corp_id)
         except ValueError as e:
             self.__app.logger.error(e)
-        # update local data
-        self.__corporations[corp_id][attribute_name] = attribute_value
+        g.corporations[corp_id][attribute_name] = attribute_value
 
         # skip fields that are local data only
         if attribute_name in [
@@ -325,22 +323,22 @@ class Tokens:
         self.__db.commit()
         cursor.close()
 
-    def __add_new_corporations(self, corp_ids, alliance_id=0) -> None:
+    def __add_new_corporations(self, corp_ids, corp_dict, alliance_id=0) -> None:
         for corp_id in corp_ids:
-            if self.__corporations.get(corp_id, None) is not None:
+            if corp_dict.get(corp_id, None) is not None:
                 # was already added, still wanted
-                self.__corporations[corp_id]["want"] = True
+                corp_dict[corp_id]["is_want"] = True
 
-                if alliance_id != 0 and alliance_id != self.__corporations[corp_id]["alliance_id"]:
+                if alliance_id != 0 and alliance_id != corp_dict[corp_id]["alliance_id"]:
                     # we know corp changed alliance, update
-                    self.__corporations[corp_id]["alliance_id"] = alliance_id
+                    corp_dict[corp_id]["alliance_id"] = alliance_id
                 continue
 
             # corp not in database yet, add what we know
-            self.__corporations[corp_id] = {
+            corp_dict[corp_id] = {
                 "id": corp_id, 
                 "alliance_id": alliance_id, 
-                "want": True,
+                "is_want": True,
                 "character_id": None,
                 "last_journal_date": None,
                 "active": 0,
@@ -351,22 +349,22 @@ class Tokens:
                 "brave_tax_balance": 0,
             }
 
-    def __fetch_alliance_corporations(self, alliance_id) -> None:
+    def __fetch_alliance_corporations(self, alliance_id, corp_dict) -> None:
         # return {99003214: [98024275], 99010079: [98112599, 98209548]}
         url = f'{env_vars['ESI_BASE_URL']}/alliances/{alliance_id}/corporations/'
         response = requests.get(url, timeout=15)
         if response.status_code == 200:
-            self.__add_new_corporations(response.json(), alliance_id)
+            self.__add_new_corporations(response.json(), corp_dict, alliance_id)
         else:
             self.__app.logger.error(response.content)
 
     def __update_names(self) -> None:
         # update names for corps and corp ceos
-        corporation_ids = list(self.__corporations)
+        corporation_ids = list(g.corporations)
         ceo_id_corp_lookup = {}
         for k,v in [
             (corp["corporation_ceo_id"],corp["id"])
-            for corp in self.__corporations.values()
+            for corp in g.corporations.values()
             if corp["corporation_ceo_id"] is not None
         ]:
             ceo_id_corp_lookup[k] = v
@@ -379,17 +377,17 @@ class Tokens:
         if response.status_code == 200:
             for item in response.json():
                 if item['category'] == 'corporation':
-                    self.__corporations[item['id']]["corporation_name"] = item['name']
+                    g.corporations[item['id']]["corporation_name"] = item['name']
                 if item['category'] == 'character':
                     corp_id = ceo_id_corp_lookup[item["id"]]
-                    self.__corporations[corp_id]["corporation_ceo_name"] = item["name"]
+                    g.corporations[corp_id]["corporation_ceo_name"] = item["name"]
         else:
             self.__app.logger.error(response.content)
 
     def __update_owner_names(self):
         # slightly different because owner is not guaranteed unique (ceo was)
         owner_names = {}
-        for corp in self.__corporations.values():
+        for corp in g.corporations.values():
             if corp["corporation_owner_id"] is not None:
                 owner_names[corp["corporation_owner_id"]] = None
         url = f'{env_vars['ESI_BASE_URL']}/universe/names'
@@ -400,7 +398,7 @@ class Tokens:
                     owner_names[item["id"]] = item["name"]
         else:
             self.__app.logger.error(response.content)
-        for corp in self.__corporations.values():
+        for corp in g.corporations.values():
             if corp["corporation_owner_id"] is not None:
                 corp["corporation_owner_name"] = owner_names[corp["corporation_owner_id"]]
 
@@ -421,7 +419,7 @@ class Tokens:
             default to missing only andlimit to 5 for new entries because 
             it is slow and we probably just want the page to load first.
         """
-        for corp_id, corp in self.__corporations.items():
+        for corp_id, corp in g.corporations.items():
             if not missing_only or corp["corporation_ceo_id"] is None:
                 url = f'{env_vars['ESI_BASE_URL']}/corporations/{corp_id}'
                 response = requests.get(url, timeout=15)
@@ -433,10 +431,10 @@ class Tokens:
                     corp["alliance_id"] = corp_info.get("alliance_id", 0)
                 else:
                     self.__app.logger.error(response.content)
-            if limit is not None:
-                limit -= 1
-                if limit < 1:
-                    return
+                if limit is not None:
+                    limit -= 1
+                    if limit < 1:
+                        return
 
     def __update_corporations_table(self):
         """
@@ -449,6 +447,7 @@ class Tokens:
         """
         corporations_columns = [
             "id",
+            "is_want",
             "alliance_id",
             "is_alt_corp",
             "is_taxed",
@@ -460,7 +459,7 @@ class Tokens:
             "active"
         ]
         corp_data = []
-        for corp in self.__corporations.values():
+        for corp in g.corporations.values():
             corp_data.append([corp[column] for column in corporations_columns])
         update = ", ".join(
             [
@@ -490,8 +489,8 @@ class Tokens:
         for res in character_ids:
             return res["id"]
 
-    def __has_token(self, corporation_id: int, character_id: int) -> bool:
-        for token in self.__corporations[corporation_id]["tokens"]:
+    def __has_token(self, corporations, corporation_id: int, character_id: int) -> bool:
+        for token in corporations[corporation_id]["tokens"]:
             if token['characterId'] == character_id:
                 return True
         return False
@@ -543,7 +542,7 @@ class Tokens:
         write_json_file(self.__config, CONFIG_FILENAME)
         return redirect(url_for('tokens'))
 
-    def test_mail(self) -> wzResponse:
+    def test_mail(self) -> Union[str,wzResponse]:
         """send a test mail"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
@@ -580,4 +579,4 @@ class Tokens:
         else:
             info_str = f"{response.status_code}, {response.headers}, {response.content}"
             self.__app.logger.error(info_str)
-        return redirect(url_for('tokens'))
+        return self.show()

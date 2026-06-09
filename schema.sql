@@ -69,3 +69,5 @@ ALTER TABLE corporations ADD alliance_id BIGINT unsigned NOT NULL after id;
 ALTER TABLE corporations ADD is_taxed BOOLEAN NULL DEFAULT 1 after is_alt_corp;
 -- corp without key can be fine if inactive or not yet configured
 ALTER TABLE corporations MODIFY character_id int NULL;
+-- store so we can avoid esi lookups on page reloads
+ALTER TABLE corporations ADD is_want BOOLEAN NULL DEFAULT 0 after id;

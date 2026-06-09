@@ -23,7 +23,7 @@ def tokens() -> Union[str, wzResponse]:
     return Tokens(app).show()
 
 @app.route('/tokens/set_corp_attr', methods=['POST'])
-def set_corp_attr() -> wzResponse:
+def set_corp_attr() -> Union[str,wzResponse]:
     return Tokens(app).set_corp_attr()
 @app.route('/tokens/set_config', methods=['POST'])
 def set_config() -> wzResponse:
@@ -38,13 +38,13 @@ def update_wallets() -> wzResponse:
     return Tokens(app).update_wallets()
 
 @app.route('/tokens/show_starting_balance_editor', methods=['POST'])
-def show_starting_balance_editor() -> wzResponse:
+def show_starting_balance_editor() -> Union[str,wzResponse]:
     return Tokens(app).show_starting_balance_editor()
 @app.route('/tokens/set_starting_balance', methods=['POST'])
-def set_starting_balance() -> wzResponse:
+def set_starting_balance() -> Union[str,wzResponse]:
     return Tokens(app).set_starting_balance()
 @app.route('/tokens/show_owner_editor', methods=['POST'])
-def show_owner_editor() -> wzResponse:
+def show_owner_editor() -> Union[str,wzResponse]:
     return Tokens(app).show_owner_editor()
 
 @app.route('/tokens/update_tax_records', methods=['POST'])
@@ -52,7 +52,7 @@ def update_tax_records() -> wzResponse:
     return Tokens(app).update_tax_records()
 
 @app.route('/tokens/test_mail', methods=['POST'])
-def test_mail() -> wzResponse:
+def test_mail() -> Union[str,wzResponse]:
     return Tokens(app).test_mail()
 @app.route('/tokens/tax_evemail', methods=['POST'])
 def tax_evemail() -> wzResponse:

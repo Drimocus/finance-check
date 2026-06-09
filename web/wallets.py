@@ -80,6 +80,7 @@ class Wallets:
 
         for data in corporation_data:
             corporation_id = data[0]
+            last_journal_date = ''
             for division in range(1, num_divisions + 1):
                 div_journal_date = self.__read_wallet(
                     corporation_id = corporation_id,
@@ -88,20 +89,17 @@ class Wallets:
                     division=division
                 )
                 if div_journal_date is None:
-                    self.logger.warning('    Division %s: incomplete journal.', division)
-                # preserve journal date logic for division 1
-                if division == 1:
+                    self.logger.warning('Corporation %s, Division %s: incomplete journal.', corporation_id, division)
+                elif div_journal_date > last_journal_date:
                     last_journal_date = div_journal_date
                 # rate lim: 300 tokens / 15m, 200ok=2 tokens, 10/min, ~6 per
                 time.sleep(7)
-            if last_journal_date:
+            if last_journal_date != '':
                 self.logger.info('Read corporation %s wallet: Success.', corporation_id)
                 cursor = self.__db.cursor()
                 cursor.execute("UPDATE corporations SET last_journal_date = %s WHERE id = %s",
                                [last_journal_date, corporation_id])
                 self.__db.commit()
-            else:
-                self.logger.info('Read corporation %s wallet: Failed to read complete journal.', corporation_id)
 
     def __read_wallet(self, corporation_id: int, character_id: int, previous_journal_date: str, division: int = 1, page: int = 1,
                       retry: int = 0) -> Optional[str]:

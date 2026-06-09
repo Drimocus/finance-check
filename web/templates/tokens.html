@@ -66,7 +66,7 @@
             </thead>
             <tbody>
                 {% for corp_id, corp in corporations.items() %}
-                    {% if corp.want and corp.alliance_id == alliance_id%}
+                    {% if corp.is_want and corp.alliance_id == alliance_id%}
                     {% set tokens = corp.tokens %}
                     <tr>
                         <td>
@@ -176,7 +176,7 @@
             </tr>
         </thead>
         {% for corp_id, corporation in corporations.items() if corporation.character_id and corporation.active %}
-            {% if not has_token(corp_id, corporation.character_id) %}
+            {% if not has_token(corporations, corp_id, corporation.character_id) %}
                 <tbody>
                     <tr>
                         <td>
@@ -213,7 +213,7 @@
                 <th>Action</th>
             </tr>
         </thead>
-        {% for corp_id, corporation in corporations.items() if corporation.character_id and corporation.active and not corporation.want %}
+        {% for corp_id, corporation in corporations.items() if corporation.character_id and corporation.active and not corporation.is_want %}
             <tbody>
                 <tr>
                     <td>
@@ -237,14 +237,15 @@
         {% endfor %}
     </table>
 
-    <h1>Explanation of each column fields </h1>
+    <h1>Explanation of Fields </h1>
     <dl>
         <dt>Token columns:</dt>
         <dt>Configured - Character ID</dt><dd> The current token selected for the corp, this one will be used to try and get wallet data.</dd>
-        <dt>Last Journal</dt><dd>The last known wallet transaction of this corporation. Wallet data can only be updated with a configured, still valid, active key. ESI only keeps wallet data of the last 30 days, so it is not possible to fix older missed data. </dd>
+        <dt>Last Journal</dt><dd>The last wallet update of this corporation. Wallet data can only be updated with a configured, still valid, active key. ESI only keeps wallet data of the last 30 days, so it is not possible to fix older missed data. </dd>
         <dt>Active</dt><dd>Controls wallet journal updates, if disabled the corporations wallets will not be tracked. Tax reports require wallet data, if disabled the corp will also stop receiving tax reports.</dd>
         <dt>Available - Character ID</dt><dd>Available tokens for the corp, currently selected one is mentioned, use select button action to switch.</dd>
         <dt>Last Checked</dt><dd>Last time the token was checked valid.</dd>
+        <dt>Wanted</dt><dd>Corps we still care about, the database may also hold older entries from corps that have left, which you can deactivate.</dd>
     </dl>
     <dl>
         <dt>Tax Data columns:</dt>
@@ -266,6 +267,7 @@
     <br>
     <h1>Test Buttons - (with very real evemails, dont spam the wrong one) </h1>
     Remove this section in production, it is not intended for regular use.<br>
+    It is here purely to test / show the functions work as expected <br>
     Wallet Journal Updates, and Tax record Update + EVEMails should be cronjobbed. <br>
     - wallets.py - run on 1st, 10th, and 20th of month? (1 fail acceptable) <br>
     - tax_records.py - run on 2nd of month, no risk of missed data on failure, can rerun at any point in future. Also sends evemails.<br>
@@ -361,8 +363,6 @@
             method: 'POST', redirect: 'follow', body: formData, 
         }).then(response => {
             location.reload();
-            // could update page with javascript instead of reload
-            // would be much faster / smoother for user, dont need waitblock
         });
     }
     function setCorpAttr(corporation_id, attribute_name, attribute_value) {
@@ -374,9 +374,11 @@
         fetch(`/tokens/set_corp_attr`, { 
             method: 'POST', redirect: 'follow', body: formData, 
         }).then(response => {
-            location.reload();
-            // could update page with javascript instead of reload
+            return response.text();
+            // could update page with javascript instead of wait for response
             // would be much faster / smoother for user, dont need waitblock
+        }).then(text => {
+            document.querySelector('html').innerHTML = text;
         });
     }
     function verifyTaxRThresh(threshold) {
@@ -395,7 +397,6 @@
         }
         confirmed_t_r = false;
         const tax_r_thresh_input = document.getElementById("tax_r_thresh");
-        var start = new Date();
         const formData = new FormData();
         formData.append("threshold", tax_r_thresh_input.value);
         tax_reminder_button_span.innerHTML = "Sending Tax Reminders... refresh to see progress";
@@ -413,7 +414,6 @@
             return;
         }
         confirmed_t_m = false;
-        var start = new Date();
         const formData = new FormData();
         tax_reminder_button_span.innerHTML = "Sending Tax Reminders... refresh to see progress";
         tax_mails_button_span.innerHTML = "Sending Tax EVEMails... refresh to see progress.";
@@ -453,9 +453,9 @@
         fetch(`/tokens/set_starting_balance`, { 
             method: 'POST', redirect: 'follow', body: formData, 
         }).then(response => {
-            location.reload();
-            // could update page with javascript instead of reload
-            // would be much faster / smoother for user, dont need waitblock
+            return response.text();
+        }).then(text => {
+            document.querySelector('html').innerHTML = text;
         });
     }
     function showStartingBalanceEditor(status) {
@@ -465,7 +465,9 @@
         fetch(`/tokens/show_starting_balance_editor`, { 
             method: 'POST', redirect: 'follow', body: formData, 
         }).then(response => {
-            location.reload();
+            return response.text();
+        }).then(text => {
+            document.querySelector('html').innerHTML = text;
         });
     }
     function showOwnerEditor(status) {
@@ -475,7 +477,9 @@
         fetch(`/tokens/show_owner_editor`, { 
             method: 'POST', redirect: 'follow', body: formData, 
         }).then(response => {
-            location.reload();
+            return response.text();
+        }).then(text => {
+            document.querySelector('html').innerHTML = text;
         });
     }
 
@@ -514,7 +518,7 @@
         const test_mail_button_span = document.getElementById("test_mail_button_span");
         var receiver_id = document.getElementById("receiver_id").value;
         var sender_id = document.getElementById("sender_id").value;
-        var m_start = new Date();
+        var start = new Date();
         formData.append("receiver_id", receiver_id);
         formData.append("sender_id", sender_id);
         test_mail_button_span.innerHTML = 'Sending...';
