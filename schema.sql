@@ -71,3 +71,5 @@ ALTER TABLE corporations ADD is_taxed BOOLEAN NULL DEFAULT 1 after is_alt_corp;
 ALTER TABLE corporations MODIFY character_id int NULL;
 -- store so we can avoid esi lookups on page reloads
 ALTER TABLE corporations ADD is_want BOOLEAN NULL DEFAULT 0 after id;
+ALTER TABLE corporations ADD ceo_name VARCHAR(255) NULL after corporation_ceo_id;
+ALTER TABLE corporations ADD owner_name VARCHAR(255) NULL after corporation_owner_id;

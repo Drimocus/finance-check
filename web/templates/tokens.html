@@ -121,15 +121,21 @@
                         </td>
                         <td>
                             <a href="https://evewho.com/character/{{ corp.corporation_ceo_id }}" target="_blank"
-                                   rel="noopener noreferrer" title="EveWho">{{ corp.corporation_ceo_name }}</a>
+                                   rel="noopener noreferrer" title="EveWho">{{ corp.ceo_name }}</a>
                         </td>
                         <td>
+                            {% if corp.owner_name %}
                             <a href="https://evewho.com/character/{{ corp.corporation_owner_id }}" target="_blank"
-                                   rel="noopener noreferrer" title="EveWho">{{ corp.corporation_owner_name }}</a>
+                                   rel="noopener noreferrer" title="EveWho">{{ corp.owner_name }}</a>
+                            {% endif %}
                         </td>
                         {% if show_owner_editor %}
                         <td>
-                            <input type="text" value="{{ corp.corporation_owner_name }}" min="0" onchange="setCorpAttr({{ corp_id }}, 'corporation_owner_name', this.value)">
+                            {% if corp.owner_name %}
+                            <input type="text" value="{{ corp.owner_name }}" min="0" onchange="setCorpAttr({{ corp_id }}, 'owner_name', this.value)">
+                            {% else %}
+                            <input type="text" value="" min="0" onchange="setCorpAttr({{ corp_id }}, 'owner_name', this.value)">
+                            {% endif %}
                         </td>
                         {% endif %}
                         <td class="centre_cb">
@@ -362,7 +368,9 @@
         fetch(`/tokens/set_config`, { 
             method: 'POST', redirect: 'follow', body: formData, 
         }).then(response => {
-            location.reload();
+            return response.text();
+        }).then(text => {
+            document.querySelector('html').innerHTML = text;
         });
     }
     function setCorpAttr(corporation_id, attribute_name, attribute_value) {

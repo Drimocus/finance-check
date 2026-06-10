@@ -26,7 +26,7 @@ def tokens() -> Union[str, wzResponse]:
 def set_corp_attr() -> Union[str,wzResponse]:
     return Tokens(app).set_corp_attr()
 @app.route('/tokens/set_config', methods=['POST'])
-def set_config() -> wzResponse:
+def set_config() -> Union[str,wzResponse]:
     return Tokens(app).set_config()
 
 @app.route('/tokens/update_ceos', methods=['POST'])

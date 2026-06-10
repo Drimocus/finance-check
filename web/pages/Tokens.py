@@ -87,15 +87,18 @@ class Tokens:
         g.prev_month_last_day = prev_month_end - timedelta(days=1)
 
         g.corporations = self.__load_corporations()
-        # update ceo's and names
-        self.__update_ceos()
-        self.__update_names()
-        self.__update_owner_names()
+        if 'checked_esi' not in session:
+            # update ceo's and names
+            self.__check_esi_corps()
+            self.__update_ceos()
+            self.__update_names()
+            self.__update_owner_names()
+
+            # update database with new corp info
+            self.__update_corporations_table()
+            session['checked_esi'] = True
         self.__load_token_info()
         self.__load_tax_balance()
-
-        # update database with new corp info
-        self.__update_corporations_table()
 
         # sort dict by corp name for readable webpage
         g.corporations = dict(sorted(
@@ -149,14 +152,18 @@ class Tokens:
         # convert into lookup dictionary for easier use
         corporations_lookup = {}
         for corp_dict in corporations:
-            corp_dict["is_want"] = False
             corporations_lookup[corp_dict["id"]] = corp_dict
-
-        for alliance_id in env_vars['CHECK_ALLIANCE_IDS']:
-            self.__fetch_alliance_corporations(alliance_id, corporations_lookup)
-        self.__add_new_corporations(env_vars['CHECK_CORPORATION_IDS'], corporations_lookup)
-
         return corporations_lookup
+
+    def __check_esi_corps(self):
+        # mark all current as not want
+        for corp in g.corporations.values():
+            corp["is_want"] = False
+        # load all configured corps from esi and set as want
+        for alliance_id in env_vars['CHECK_ALLIANCE_IDS']:
+            self.__fetch_alliance_corporations(alliance_id)
+        self.__add_new_corporations(env_vars['CHECK_CORPORATION_IDS'])
+
     def __load_tax_balance(self):
         for corp_id, corp in g.corporations.items():
             corp["brave_tax_balance"] = self.__tax_records.get_brave_tax_balance(
@@ -233,7 +240,7 @@ class Tokens:
 
     def set_config(
         self,
-    ) -> wzResponse:
+    ) -> Union[str,wzResponse]:
         """route to set a specific corp attribute to a new value"""
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
@@ -260,7 +267,7 @@ class Tokens:
         else:
             self.__config[attribute_name] = attribute_value
         write_json_file(self.__config, CONFIG_FILENAME)
-        return redirect(url_for('tokens'))
+        return self.show()
 
     def set_corp_attr(
         self,
@@ -286,7 +293,7 @@ class Tokens:
         # triggers related change
         if attribute_name == 'active' and attribute_value == 0:
             self.__set_corp_attr(corp_id, 'is_taxed', 0)
-        if attribute_name == 'corporation_owner_name':
+        if attribute_name == 'owner_name':
             if attribute_value == "":
                 self.__set_corp_attr(corp_id, 'corporation_owner_id', None)
             else:
@@ -306,13 +313,6 @@ class Tokens:
             self.__app.logger.error(e)
         g.corporations[corp_id][attribute_name] = attribute_value
 
-        # skip fields that are local data only
-        if attribute_name in [
-            "corporation_owner_name",
-            "corporation_ceo_name"
-        ]:
-            return
-
         # update db data
         cursor = self.__db.cursor()
         sql = f"""
@@ -323,19 +323,19 @@ class Tokens:
         self.__db.commit()
         cursor.close()
 
-    def __add_new_corporations(self, corp_ids, corp_dict, alliance_id=0) -> None:
+    def __add_new_corporations(self, corp_ids, alliance_id=0) -> None:
         for corp_id in corp_ids:
-            if corp_dict.get(corp_id, None) is not None:
+            if g.corporations.get(corp_id, None) is not None:
                 # was already added, still wanted
-                corp_dict[corp_id]["is_want"] = True
+                g.corporations[corp_id]["is_want"] = True
 
-                if alliance_id != 0 and alliance_id != corp_dict[corp_id]["alliance_id"]:
+                if alliance_id != 0 and alliance_id != g.corporations[corp_id]["alliance_id"]:
                     # we know corp changed alliance, update
-                    corp_dict[corp_id]["alliance_id"] = alliance_id
+                    g.corporations[corp_id]["alliance_id"] = alliance_id
                 continue
 
             # corp not in database yet, add what we know
-            corp_dict[corp_id] = {
+            g.corporations[corp_id] = {
                 "id": corp_id, 
                 "alliance_id": alliance_id, 
                 "is_want": True,
@@ -345,16 +345,18 @@ class Tokens:
                 "is_alt_corp": 0,
                 "is_taxed": 1,
                 "corporation_owner_id": None,
+                "owner_name": None,
                 "corporation_ceo_id": None,
+                "ceo_name": None,
                 "brave_tax_balance": 0,
             }
 
-    def __fetch_alliance_corporations(self, alliance_id, corp_dict) -> None:
+    def __fetch_alliance_corporations(self, alliance_id) -> None:
         # return {99003214: [98024275], 99010079: [98112599, 98209548]}
         url = f'{env_vars['ESI_BASE_URL']}/alliances/{alliance_id}/corporations/'
         response = requests.get(url, timeout=15)
         if response.status_code == 200:
-            self.__add_new_corporations(response.json(), corp_dict, alliance_id)
+            self.__add_new_corporations(response.json(), alliance_id)
         else:
             self.__app.logger.error(response.content)
 
@@ -380,7 +382,7 @@ class Tokens:
                     g.corporations[item['id']]["corporation_name"] = item['name']
                 if item['category'] == 'character':
                     corp_id = ceo_id_corp_lookup[item["id"]]
-                    g.corporations[corp_id]["corporation_ceo_name"] = item["name"]
+                    g.corporations[corp_id]["ceo_name"] = item["name"]
         else:
             self.__app.logger.error(response.content)
 
@@ -400,7 +402,7 @@ class Tokens:
             self.__app.logger.error(response.content)
         for corp in g.corporations.values():
             if corp["corporation_owner_id"] is not None:
-                corp["corporation_owner_name"] = owner_names[corp["corporation_owner_id"]]
+                corp["owner_name"] = owner_names[corp["corporation_owner_id"]]
 
     def update_ceos(self) -> wzResponse:
         """Route for updating all CEOs, can take a while"""
@@ -453,7 +455,9 @@ class Tokens:
             "is_taxed",
             "corporation_name",
             "corporation_owner_id",
+            "owner_name",
             "corporation_ceo_id",
+            "ceo_name",
             "character_id",
             "last_journal_date",
             "active"
