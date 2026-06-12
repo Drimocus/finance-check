@@ -1,6 +1,6 @@
-"""
+'''
     called by cronjob, what schedule ?
-"""
+'''
 
 import datetime
 import os, time
@@ -23,7 +23,7 @@ env_vars = {
 
     'ALL_TYPES_CORPORATIONS' : os.getenv('ALL_TYPES_CORPORATIONS')
 }
-JOURNAL_DATEFORMAT = "%Y-%m-%d %H:%M:%S"
+JOURNAL_DATEFORMAT = '%Y-%m-%d %H:%M:%S'
 
 class Wallets:
 
@@ -67,11 +67,11 @@ class Wallets:
     def __read_wallets(self) -> None:
         cursor = self.__db.cursor()
         cursor.execute(
-            """
+            '''
                 SELECT id, character_id, last_journal_date
                 FROM corporations
                 WHERE active = 1 AND character_id IS NOT NULL;
-            """
+            '''
         )
         corporation_data = cursor.fetchall()
         cursor.close()
@@ -97,23 +97,23 @@ class Wallets:
             if last_journal_date != '':
                 self.logger.info('Read corporation %s wallet: Success.', corporation_id)
                 cursor = self.__db.cursor()
-                cursor.execute("UPDATE corporations SET last_journal_date = %s WHERE id = %s",
+                cursor.execute('UPDATE corporations SET last_journal_date = %s WHERE id = %s',
                                [last_journal_date, corporation_id])
                 self.__db.commit()
 
     def __read_wallet(self, corporation_id: int, character_id: int, previous_journal_date: str, division: int = 1, page: int = 1,
                       retry: int = 0) -> Optional[str]:
-        """
+        '''
         https://esi.evetech.net/ui/#/Wallet/get_corporations_corporation_id_wallets_division_journal
         30 days back, 3600 seconds (1h) cache
-        """
+        '''
 
         self.logger.info('    %s page %s ... ', division, page)
 
         request_time = datetime.datetime.now()
 
         url = (
-            f'{env_vars['NEUCORE_V2_BASE_URL']}/corporations/{corporation_id}/'
+            f'{env_vars["NEUCORE_V2_BASE_URL"]}/corporations/{corporation_id}/'
             f'wallets/{division}/journal/?page={page}'
             f'&datasource={character_id}:{env_vars['FINANCE_EVE_LOGIN']}'
         )
@@ -178,7 +178,7 @@ class Wallets:
             year_month = (int(journal_date[0:4]) * 100) + int(journal_date[5:7])
 
             # amount, balance and tax is double in json but bigint in database
-            sql = """
+            sql = '''
                 INSERT IGNORE INTO wallet_journal (
                     id, 
                     corporation_id, 
@@ -196,7 +196,7 @@ class Wallets:
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
                 )
-            """
+            '''
             data = [
                 entry['id'],
                 corporation_id,
@@ -243,6 +243,6 @@ class Wallets:
         else:
             return last_journal_date
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     wallets = Wallets()
     wallets.run()
