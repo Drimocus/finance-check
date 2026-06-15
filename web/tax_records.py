@@ -3,13 +3,16 @@
 """
 
 import logging
-import os, sys, time
+import os
+import sys
+import time
 import json
+from typing import Union
+from datetime import datetime, timedelta
 import mysql.connector
 import requests
-from datetime import datetime, timedelta
 from tax_mails import prepare_tax_mail, post_tax_mail
-from typing import Union
+from slack_messages import SlackMessages
 
 def read_json_file(filename, mode='r', encoding="utf-8") -> dict:
     with open(file=filename, mode=mode, encoding=encoding) as file:
@@ -45,7 +48,9 @@ env_vars = {
     # finance app has access to tokens of finance_mails eve-login
     'FINANCE_NEUCORE_KEY' : os.getenv('API_KEY'),
     'FINANCE_MAILS_EVE_LOGIN' : os.getenv('FINANCE_MAILS_EVE_LOGIN'),
-    'FINANCE_MAILS_CHAR_NAME' : os.getenv('FINANCE_MAILS_CHAR_NAME')
+    'FINANCE_MAILS_CHAR_NAME' : os.getenv('FINANCE_MAILS_CHAR_NAME'),
+
+    'FINANCE_SLACK_USER_OAUTH_TOKEN': os.getenv('FINANCE_SLACK_USER_OAUTH_TOKEN')
 }
 
 def sql_list_format(values: list) -> str:
@@ -60,15 +65,24 @@ class TaxRecords:
     def __init__(self, config: dict, logger = None):
         self.__config = config
         if logger is None:
-            self.logger = logging.getLogger('tax_records')
+            logger = logging.getLogger('tax_records')
             logging.basicConfig(
                 filename='tax_records.log',
                 encoding='utf-8',
                 level=os.getenv('UWSGI_LOG_LEVEL', 'ERROR').upper()
             )
-        else:
-            self.logger = logger
+        self.logger = logger
         self.__check_env_vars()
+
+
+        # set up some dates for last month
+        self.today = datetime.now()
+        self.tax_month_end = datetime(self.today.year, self.today.month, 1)
+        self.tax_month_last_day = self.tax_month_end - timedelta(days=1)
+        self.tax_year = self.tax_month_last_day.year
+        self.tax_month = self.tax_month_last_day.month
+
+        self.__slack = None
 
         finance_mails_char_id = self.__check_mailer_token()
         # set neucore evemail endpoint for the specified mailer character
@@ -84,6 +98,17 @@ class TaxRecords:
             password=env_vars['DB_PASSWORD'],
             database=env_vars['DB_DATABASE'],
         )
+
+    def __init_slack(self) -> SlackMessages:
+        if self.__slack is None:
+            if env_vars['FINANCE_SLACK_USER_OAUTH_TOKEN'] is not None:
+                self.__slack = SlackMessages(self.logger)
+            else:
+                self.logger.error((
+                    '__init_slack called but environment variable'
+                    'FINANCE_SLACK_USER_OAUTH_TOKEN is missing.'
+                ))
+        return self.__slack
 
     def __check_env_vars(self):
         for key in env_vars.values():
@@ -186,8 +211,7 @@ class TaxRecords:
         db_cursor = self.__db.cursor(dictionary=True)
         db_cursor.execute(
             f'''
-                SELECT id, corporation_name, character_id, is_alt_corp, corporation_ceo_id, corporation_owner_id
-                FROM {self.__config["corp_info_table_name"]}
+                SELECT * FROM corporations
                 WHERE active = 1 and is_taxed = 1 and id = {corporation_id};
             '''
         )
@@ -198,9 +222,8 @@ class TaxRecords:
         """select all taxed, active corps"""
         db_cursor = self.__db.cursor(dictionary=True)
         db_cursor.execute(
-            f'''
-                SELECT id, corporation_name, character_id, is_alt_corp, corporation_ceo_id, corporation_owner_id
-                FROM {self.__config["corp_info_table_name"]}
+            '''
+                SELECT * FROM corporations
                 WHERE active = 1 and is_taxed = 1;
             '''
         )
@@ -208,7 +231,7 @@ class TaxRecords:
         db_cursor.close()
         return res
 
-    def insert_tax_record(self, tax_record: dict):
+    def insert_tax_record(self, corporation: dict):
         """Insert tax record into db"""
         tax_record_columns = [
             "corporation_id", 
@@ -229,12 +252,12 @@ class TaxRecords:
             f'''
                 INSERT INTO tax_records ({", ".join(tax_record_columns)})
                 VALUES (
-                    {tax_record["corporation_id"]},
-                    '{tax_record["tax_month_date"].strftime(JOURNAL_DATEFORMAT)}',
-                    {tax_record["taxable_income"]},
-                    {tax_record["corp_tax_amount"]},
-                    {tax_record["brave_tax_amount"]},
-                    {tax_record["brave_tax_payments"]}
+                    {corporation["id"]},
+                    '{corporation["tax_month_date"].strftime(JOURNAL_DATEFORMAT)}',
+                    {corporation["taxable_income"]},
+                    {corporation["corp_tax_amount"]},
+                    {corporation["brave_tax_amount"]},
+                    {corporation["brave_tax_payments"]}
                 )
                 ON DUPLICATE KEY UPDATE {update_str};
             '''
@@ -285,17 +308,11 @@ class TaxRecords:
         else:
             tax_month_end =datetime(year + 1, 1, 1)
 
-        corporation_id = corporation["id"]
-        corporation_name = corporation["corporation_name"]
-        is_alt_corp = corporation["is_alt_corp"]
-        corporation_ceo_id = corporation["corporation_ceo_id"]
-        corporation_owner_id = corporation["corporation_owner_id"]
-
         ref_types = self.__config["taxed_ref_types"]
         enabled_ref_types = [x for x in ref_types if ref_types[x]]
 
         tax_entries = self.select_corporation_wallet_journal(
-            corporation_id,
+            corporation["id"],
             divisions=[1],
             ref_types=enabled_ref_types,
             date_min=tax_month_start,
@@ -303,7 +320,7 @@ class TaxRecords:
         )
         taxable_income = sum(entry['amount'] for entry in tax_entries)
 
-        if is_alt_corp:
+        if corporation["is_alt_corp"]:
             base_tax = self.__config['alt_corps_base_tax']
             tax_receiving_corp = self.__config['alt_corps_tax_receiving_corp']
             tax_exempt_income = self.__config['alt_corps_exempt_income']
@@ -313,7 +330,7 @@ class TaxRecords:
             tax_exempt_income = self.__config['main_corps_exempt_income']
 
         payment_entries = self.select_corporation_wallet_journal(
-            corporation_id,
+            corporation["id"],
             ref_types=["corporation_account_withdrawal"],
             description_contains=tax_receiving_corp,
             date_min=tax_month_start,
@@ -324,20 +341,14 @@ class TaxRecords:
         corp_tax_amount = int(taxable_income/2)
         brave_tax_amount = max(0, int(taxable_income/2) - tax_exempt_income) + base_tax
 
-        tax_record = {
-            "corporation_id": corporation_id,
-            "tax_month_date": tax_month_start,
-            "taxable_income": taxable_income,
-            "corp_tax_amount": corp_tax_amount,
-            "brave_tax_amount": brave_tax_amount,
-            "brave_tax_payments": brave_tax_payments,
-            "corporation_name": corporation_name,
-            "corporation_ceo_id": corporation_ceo_id,
-            "corporation_owner_id": corporation_owner_id,
-            "is_alt_corp": is_alt_corp,
-        }
-        self.insert_tax_record(tax_record)
-        return tax_record
+        corporation["tax_month_date"] = tax_month_start
+        corporation["taxable_income"] = taxable_income
+        corporation["corp_tax_amount"] = corp_tax_amount
+        corporation["brave_tax_amount"] = brave_tax_amount
+        corporation["brave_tax_payments"] = brave_tax_payments
+
+        self.insert_tax_record(corporation)
+        return corporation
 
     def update_tax_records(
         self,
@@ -346,50 +357,37 @@ class TaxRecords:
     ):
         """update database tax records for all corps"""
         corporations = self.select_taxable_corps()
-        tax_month_records = []
         if len(corporations) == 0:
-            self.logger.info('check_taxes: no taxable corporations found in db, exiting')
-        for corporation in corporations:
-            month_record = self.update_tax_record(corporation, year, month)
-            if month_record:
-                tax_month_records.append(month_record)
-        return tax_month_records
+            self.logger.info(
+                'update_tax_records: no taxable corporations found in db'
+            )
+        for corp in corporations:
+            self.update_tax_record(corp, year, month)
+        return corporations
 
     def send_tax_evemail(self, corporation_id: int):
         """Send tax evemail to a specific corp."""
-        # set up some dates for last month
-        current_date = datetime.now()
-        tax_month_end = datetime(current_date.year, current_date.month, 1)
-        tax_month_last_day = tax_month_end - timedelta(days=1)
-
-        self.logger.info(
-            (
+        self.logger.info((
                 "checking taxes, current date: %s, "
                 "checking tax for month: %s-%s, "
                 "corporation checked: %s"
              ),
-            current_date,
-            tax_month_last_day.year,
-            tax_month_last_day.month,
-            corporation_id
+            self.today, self.tax_year, self.tax_month, corporation_id
         )
-
-        record = self.update_tax_record(
-            self.select_taxable_corp(corporation_id),
-            tax_month_last_day.year,
-            tax_month_last_day.month
+        corp = self.select_taxable_corp(corporation_id)
+        self.update_tax_record(corp, self.tax_year, self.tax_month)
+        corp["brave_tax_balance"] = self.get_brave_tax_balance(
+            corp["id"],
+            self.tax_month_last_day
         )
-        record["brave_tax_balance"] = self.get_brave_tax_balance(
-            record["corporation_id"],
-            tax_month_last_day
-        )
-        body, recipients, mail_subject = prepare_tax_mail(record, self.__config)
+        body, recipients, mail_subject = prepare_tax_mail(corp, self.__config)
         post_tax_mail(
             env_vars["FINANCE_NEUCORE_KEY"],
             self.evemail_endpoint,
             recipients,
             body,
             mail_subject,
+            logger = self.logger
         )
 
     def send_tax_evemails(
@@ -407,24 +405,20 @@ class TaxRecords:
             This can be used through the web app if you set the timeout long
             enough, but that's a bit for fun, the intention is a cronjob.
         """
-        # set up some dates for last month
-        current_date = datetime.now()
-        tax_month_end = datetime(current_date.year, current_date.month, 1)
-        tax_month_last_day = tax_month_end - timedelta(days=1)
 
-        month_records = self.update_tax_records(
-            tax_month_last_day.year,
-            tax_month_last_day.month
+        taxed_corporations = self.update_tax_records(
+            self.tax_year,
+            self.tax_month
         )
-        for record in month_records:
-            record["brave_tax_balance"] = self.get_brave_tax_balance(
-                record["corporation_id"],
-                tax_month_last_day
+        for corp in taxed_corporations:
+            corp["brave_tax_balance"] = self.get_brave_tax_balance(
+                corp["id"],
+                self.tax_month_last_day
             )
         if balance_threshold is not None:
-            month_records = [
-                record for record in month_records if
-                record["brave_tax_balance"] > balance_threshold
+            taxed_corporations = [
+                corp for corp in taxed_corporations if
+                corp["brave_tax_balance"] > balance_threshold
             ]
 
         self.logger.info(
@@ -434,28 +428,28 @@ class TaxRecords:
                 "threshold for evemails: %s, "
                 "%s corporations to mail"
              ),
-            current_date,
-            tax_month_last_day.year,
-            tax_month_last_day.month,
+            self.today,
+            self.tax_year,
+            self.tax_month,
             balance_threshold,
-            len(month_records)
+            len(taxed_corporations)
         )
         if web_called:
-            self.__config['total_mails'] = len(month_records)
+            self.__config['total_mails'] = len(taxed_corporations)
             self.__config['mailing'] = True
             self.__config['mail_progress'] = 0
-            self.__config['mail_start'] = current_date.strftime(JOURNAL_DATEFORMAT)
+            self.__config['mail_start'] = self.today.strftime(JOURNAL_DATEFORMAT)
             write_json_file(self.__config, CONFIG_FILENAME)
 
-        for record in month_records:
+        for corp in taxed_corporations:
             if web_called:
                 self.__config = read_json_file(CONFIG_FILENAME)
                 if self.__config.get('mailing', True) is False:
                     self.logger.error('mailing task cancelled by web client.')
                     self.__config['mail_cancelled'] = datetime.now().strftime(JOURNAL_DATEFORMAT)
                     write_json_file(self.__config, CONFIG_FILENAME)
-                    return
-            body, recipients, mail_subject = prepare_tax_mail(record, self.__config)
+                    return taxed_corporations
+            body, recipients, mail_subject = prepare_tax_mail(corp, self.__config)
             if web_called:
                 self.__config['mail_progress'] += 1
                 write_json_file(self.__config, CONFIG_FILENAME)
@@ -467,12 +461,77 @@ class TaxRecords:
                 recipients,
                 body,
                 mail_subject,
+                logger = self.logger
             )
         if web_called:
             self.__config['total_mails'] = 0
             write_json_file(self.__config, CONFIG_FILENAME)
+        return taxed_corporations
+
+    def send_slack_messages(self, corporations: list[dict]):
+        '''
+            send a tax record slack message to each corp owner.
+
+            corporation {
+                corporation_name: str
+                owner_name: str
+                tax_record: dict
+            }
+        '''
+        slack = self.__init_slack()
+        for corp in corporations:
+            owner_name = corp.get('owner_name')
+            if owner_name is None or owner_name == '':
+                continue
+            owner_slack = slack.get_member_by_real_name(owner_name)
+            if owner_slack is None:
+                self.logger.info(
+                    'owner %s of %s not found on slack',
+                    owner_name, corp['corporation_name']
+                )
+                continue
+            message = slack.format_slack_report(
+                corp,
+                self.__config
+            )
+            slack.send_message(owner_slack['id'], message)
+    def send_slack_tax_notif(self, corporations):
+        '''
+            notify corp owner channels that tax reports have been sent.
+        '''
+        slack = self.__init_slack()
+        n_corps = len(corporations)
+        m_date = self.tax_month_last_day
+        message = (
+            f":moneybag: {m_date.strftime("%B")} {m_date.strftime("%Y")}"
+            f"Tax Reports have been sent, {n_corps} taxed corporations."
+        )
+        alt_tax_slack_c = slack.get_channel_by_name(
+            self.__config['alt_corps_tax_help_channel']
+        )
+        main_tax_slack_c = slack.get_channel_by_name(
+            self.__config['main_corps_tax_help_channel']
+        )
+        if alt_tax_slack_c is not None:
+            slack.send_message(
+                alt_tax_slack_c['id'],
+                message
+            )
+        if main_tax_slack_c is not None:
+            if (
+                alt_tax_slack_c is not None and
+                main_tax_slack_c['id'] == alt_tax_slack_c['id']
+            ):
+                # same channel > already messaged
+                return
+            slack.send_message(
+                main_tax_slack_c['id'],
+                message
+            )
 
 if __name__ == "__main__":
     tax_config = read_json_file(CONFIG_FILENAME)
     tax_records = TaxRecords(tax_config)
-    tax_records.send_tax_evemails()
+    taxed_corps = tax_records.send_tax_evemails()
+    tax_records.send_slack_messages(taxed_corps)
+    tax_records.send_slack_tax_notif(taxed_corps)

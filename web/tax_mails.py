@@ -4,6 +4,8 @@
     send pretty evemail message
 """
 import json
+import logging
+import os
 import requests
 
 def prefix_str(name_str: str, min_len) -> str:
@@ -16,7 +18,7 @@ def prepare_tax_mail(tax_record: dict, config: dict) -> tuple[str, list[dict], s
     """"make body, recipients, mail subject for evemail"""
     tax_month_date = tax_record["tax_month_date"]
     corporation_name =  tax_record["corporation_name"]
-    corporation_id = tax_record["corporation_id"]
+    corporation_id = tax_record["id"]
     taxable_income = tax_record["taxable_income"]
     corp_tax_amount = tax_record["corp_tax_amount"]
     brave_tax_amount = tax_record["brave_tax_amount"]
@@ -112,7 +114,8 @@ def post_tax_mail(
     recipients: list[dict],
     body: str,
     subject: str,
-    approved_cost: int = 0
+    approved_cost: int = 0,
+    logger = None
 ):
     """
     recipients: [
@@ -120,6 +123,13 @@ def post_tax_mail(
         "recipient_type": "alliance","character","corporation","mailing_list"
     ]
     """
+    if logger is None:
+        logger = logging.getLogger('tax_mails')
+        logging.basicConfig(
+            filename='tax_records.log',
+            encoding='utf-8',
+            level=os.getenv('UWSGI_LOG_LEVEL', 'ERROR').upper()
+        )
 
     # corp / alliance recipient = only your own, only if enabled by ingame roles
     mail_info = {
@@ -140,9 +150,12 @@ def post_tax_mail(
         timeout=15
     )
     if res.status_code != 201:
-        print(
-            f'Failed to send mail: Status Code: {res.status_code},',
-            f'Reason: {res.reason}, Body: {res.text}'
+        logger.error(
+            'Failed to send mail: Status Code: %s, Reason: %s, Body: %s',
+            res.status_code, res.reason, res.text
         )
     else:
-        print(f"sent mail with subject '{subject}' to recipients {recipients}")
+        logger.info(
+            "sent mail with subject '%s' to recipients %s",
+            subject, recipients
+        )
