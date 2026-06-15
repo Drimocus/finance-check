@@ -7,10 +7,32 @@
 - Administration > EVE Logins > Add a new eve login (finanace-mails), give it the `esi-mail.send_mail.v1` scope. Add a token to it by clicking the login URL and signing in with the character you want to send emails from.
 - Administration > Finance > EVE Logins > Add the new finance-mails login created in the previous step to the existing finance application.
 
+## Slack App
+The person in charge of slack tax communication should make a new slack app.
+
+- https://api.slack.com/apps -> Create New App -> From scratch
+- `App Name` : tax-reports
+- `Pick a workspace to develop your app in` : Brave Collective
+  - unless you are an admin, you will see an approval is necessary message
+- Select `OAuth & permissions` on the left menu, in the Features section
+- Under `User Token Scopes`, add the following scopes with the `Add an Oath Scope` Button:
+  - `chat:write`
+  - `users:read`
+  - `channels:read`
+  - `groups:read`
+- Scroll back up, but still in `OAuth & Permissions`, click `Install to Brave Collective` -> `Allow`
+  - If you needed approval, click `Request to Workspace Install`, add a description if asked.
+  - wait for approval, then refresh the page and click `Install to Brave Collective` -> `Allow`
+- Copy the `User OAuth Token`, it usually starts with `xoxp-`, and set it as FINANCE_SLACK_USER_OAUTH_TOKEN environment variable.
+
+The users and chat scopes are needed to be able to find the slack account of corporation owners, and send them tax reports. The channels and groups scopes are necessay to be able to find the generic tax notification / help channels.
+
+We use the User Based application instead of a Bot messages based version. This is nice because it lets you, the tax contact, log into slack and see the messages sent as if they were your own. If people reply with questions you can answer them.
 
 ## add additional environment variables
 - `FINANCE_MAILS_EVE_LOGIN` - the new neucore eve login with the send-mail scope. 
-- `FINANCE_MAILS_CHAR_NAME` - the character that should send the evemails, the eve login for finance mails should have a token for this character, and the finance application should have access to the eve-login
+- `FINANCE_MAILS_CHAR_NAME` - the character that should send the evemails, the eve login for finance mails should have a token for this character, and the finance application should have access to the eve-login.
+- `FINANCE_SLACK_USER_OAUTH_TOKEN` - the token for the slack app to send tax reports and notifications on the brave slack.
 
 That is assuming we still have the existing ones from finance : `[DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_DATABASE, API_BASE_URL, API_KEY, API_EVE_LOGIN, LOGIN_CHARACTERS, EVE_APP_CALLBACK, EVE_APP_SECRET, EVE_APP_ID, SECRET_KEY, CHECK_ALLIANCES, CHECK_CORPORATIONS]`
 
@@ -30,7 +52,7 @@ With finance-check DB we mean the existing one for finance with wallet_journal a
 
 ## set up cronjobs
 - remove the old `python console/fetch-wallets.py` cron task
-- replace it with a new task for `python web/wallets.py`, would liket this to run at `0 0 1 * *`, and at least one more time in the middle of a month to cover the limit of 30 days that esi wallet data has. This will update wallet journal for all corps as before, but now for all divisions. It will take longer, rate limits should be respected. Data produced should not be substantially more, most records are in divison 1. This covers mistakes of people sending tax payments from the wrong division, worth saving the trouble of talking to people and manually fixing the records.
+- replace it with a new task for `python web/wallets.py`, would liket this to run at `0 0 1/10 * *`, need at least 2 per month to cover the limit of 30 days that esi wallet data has. This will update wallet journal for all corps as before, but now for all divisions. It will take longer, rate limits should be respected. Data produced should not be substantially more, most records are in divison 1. This covers mistakes of people sending tax payments from the wrong division, worth saving the trouble of talking to people and manually fixing the records.
 - add a new task for `python web/tax_records.py`, would like this to run at `0 0 2 * *`, that should be plenty of time for the wallet update to have finished, which we need for tax records. This constructs tax records for each corp for the previous month, and sends it to each corp's ceo & owner if known.
 
 ## what might break: rate limits / neucore
