@@ -1,5 +1,6 @@
 '''
-    called by cronjob, what schedule ?
+    Run this at the start of each month, the 12th, and 22th
+    Callable by cronjob, 0 0 1/11 * * : python web/wallets.py
 '''
 
 import datetime

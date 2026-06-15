@@ -52,7 +52,7 @@ With finance-check DB we mean the existing one for finance with wallet_journal a
 
 ## set up cronjobs
 - remove the old `python console/fetch-wallets.py` cron task
-- replace it with a new task for `python web/wallets.py`, would liket this to run at `0 0 1/10 * *`, need at least 2 per month to cover the limit of 30 days that esi wallet data has. This will update wallet journal for all corps as before, but now for all divisions. It will take longer, rate limits should be respected. Data produced should not be substantially more, most records are in divison 1. This covers mistakes of people sending tax payments from the wrong division, worth saving the trouble of talking to people and manually fixing the records.
+- replace it with a new task for `python web/wallets.py`, would like this to run at `0 0 1/11 * *`. We want it predictably at the start of the month so we can send tax reports afterwards. And then at least once more per month to cover the limit of 30 days on esi wallet data. This will update wallet journal for all corps as before, but now for all divisions. It will take longer, rate limits should be respected. Data produced should not be substantially more, most records are in divison 1. This covers mistakes of people sending tax payments from the wrong division, worth saving the trouble of talking to people and manually fixing the records.
 - add a new task for `python web/tax_records.py`, would like this to run at `0 0 2 * *`, that should be plenty of time for the wallet update to have finished, which we need for tax records. This constructs tax records for each corp for the previous month, and sends it to each corp's ceo & owner if known.
 
 ## what might break: rate limits / neucore

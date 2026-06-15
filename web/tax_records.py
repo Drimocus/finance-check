@@ -1,5 +1,6 @@
 """
-    callable by cronjob, 0 0 2 * * : python console/check_taxes.py
+    Run this at end of day 1 of each month, to update and send tax records.
+    Callable by cronjob, 0 0 2 * * : python web/check_taxes.py
 """
 
 import logging
