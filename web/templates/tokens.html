@@ -271,22 +271,23 @@
         <dd>Allows a manual plus or minus amount for the total balance. Useful for corps that had an tax debt or overpayment left from the previous system. Also useful in case a future edit is needed due to mistakes or update failures.</dd>
     </dl>
     <br>
-    <h1>Test Buttons - (with very real evemails, dont spam the wrong one) </h1>
+    <h1>Test Buttons - (with very real evemails, dont spam the wrong people) </h1>
     Remove this section in production, it is not intended for regular use.<br>
-    It is here purely to test / show the functions work as expected <br>
-    Wallet Journal Updates, and Tax record Update + EVEMails should be cronjobbed. <br>
-    - wallets.py - run on 1st, 10th, and 20th of month? (1 fail acceptable) <br>
-    - tax_records.py - run on 2nd of month, no risk of missed data on failure, can rerun at any point in future. Also sends evemails.<br>
-    Multi-Mail test buttons have a confirmation step, rate limmits are respected with naive sleeps. Might end early if uwsgi timeout / harakiri is reached before all mails can be sent. <br><br>
+    It is here purely to test / show the cronjob functions work as expected <br>
+    Wallet Journal Updates, and Tax Records Update + Messages should be cronjobbed. <br>
+    - wallets.py - runs on 1st, 11th, and 22th of month<br>
+    - tax_records.py - runs on 2nd of month<br>
+    Rate limits are respected with naive sleeps. The test buttons for multi-corp functions will time out if you enabled too many and the uwsgi limit is reached, again, meant for cronjob, this is just for testing a few. <br><br>
 
     Force wallet journal update, should take about a minute per configured corp:
     <span id="wallet_status">
         <input type="submit" value="Update All Wallet Journals" onclick=updateWallets()>
-    </span>
+    </span><br>
+     - If you enabled too many this test button function probably times out.
     <br>
     <br>
     <span id="tax_records_update_span">
-        Tax Records Update (Requires wallet journal data)
+        Tax Records Update (Requires wallet journal data) - applies to corps with taxed enabled<br>
         Year: <input id="t_u_year" class="nospin year" type="number" value={{ month_date.year }}>
         Month: <input id="t_u_month" class="nospin month" type="number" value={{ month_date.month }} min="1" max="12">
         
@@ -311,25 +312,26 @@
         </span>
     </span><br><br>
     <span>
-        EVEMail Specific Corp Tax Report - 
+        Send tax EVEMail and Slack messages to a specific Corp. 
         Corp ID: <input id="ctm_corp_id" class="nospin" type="number" value=0>
         
         <span id="ctm_mail_button_span">
-            <input type="submit" value="Send Tax Mail" onclick=sendTaxCorp()>
+            <input type="submit" value="Send Tax Message" onclick=sendTaxCorp()>
         </span>
     </span><br><br>
     <span>
-        Tax EVEMails if balance low - Send tax evemails for the previous month to every taxed corp who's balance is below the specified amount.<br>
+        <b>THESE CONTACT EVERY TAXED CORP</b> - if you enabled too many these test button functions probably time out.<br>
+        Tax EVEMails if balance low - Send tax EVEMail and Slack message for the previous month to every taxed corp who's balance is below the specified amount.<br>
         Tax Balance Threshold: <input id="tax_r_thresh" class="nospin isk_amount" type="number" value=-100000000 onchange=verifyTaxRThresh(this.value) title="must be negative">
         
         <span id="tax_reminder_button_span">
-            <input type="submit" value="Send Tax Reminders" onclick=sendTaxR()>
+            <input type="submit" value="Send Tax Messages" onclick=sendTaxR()>
         </span>
     </span><br><br>
     <span>
-        Tax EVEMails - Send tax evemails for the previous month to every taxed corp :
+        Tax EVEMails - Send tax EVEMail and Slack messages for the previous month to every taxed corp :
         <span id="tax_mails_button_span">
-            <input type="submit" value="Send Tax EVEMails" onclick=sendTaxM()>
+            <input type="submit" value="Send Tax Messages" onclick=sendTaxM()>
         </span>
     {% endif %}
     </span><br><br>
@@ -407,8 +409,8 @@
         const tax_r_thresh_input = document.getElementById("tax_r_thresh");
         const formData = new FormData();
         formData.append("threshold", tax_r_thresh_input.value);
-        tax_reminder_button_span.innerHTML = "Sending Tax Reminders... refresh to see progress";
-        tax_mails_button_span.innerHTML = "Sending Tax EVEMails... refresh to see progress.";
+        tax_reminder_button_span.innerHTML = "Sending Tax Messages... refresh to see progress";
+        tax_mails_button_span.innerHTML = "Sending Tax Messages... refresh to see progress.";
         fetch(`/tokens/tax_evemails`, { 
             method: 'POST', redirect: "follow", body: formData, 
         });
@@ -423,8 +425,8 @@
         }
         confirmed_t_m = false;
         const formData = new FormData();
-        tax_reminder_button_span.innerHTML = "Sending Tax Reminders... refresh to see progress";
-        tax_mails_button_span.innerHTML = "Sending Tax EVEMails... refresh to see progress.";
+        tax_reminder_button_span.innerHTML = "Sending Tax Messages... refresh to see progress";
+        tax_mails_button_span.innerHTML = "Sending Tax Messages... refresh to see progress.";
         fetch(`/tokens/tax_evemails`, { 
             method: 'POST', redirect: "follow", body: formData, 
         });

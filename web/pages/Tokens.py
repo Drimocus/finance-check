@@ -211,13 +211,17 @@ class Tokens:
 
         try:
             corp_id = int(request.form.get('corporation_id'))
-            starting_balance = int(request.form.get('starting_balance'))
+            starting_balance_str = request.form.get('starting_balance', None)
+            if starting_balance_str == '':
+                starting_balance = 0
+            else:
+                starting_balance = int(starting_balance_str)
         except ValueError as e:
             self.__app.logger.error(e)
 
         self.__tax_records.insert_tax_record(
             {
-                "corporation_id": corp_id,
+                "id": corp_id,
                 "tax_month_date": datetime(year=1, month=1, day=1),
                 "taxable_income": 0,
                 "corp_tax_amount": 0,
@@ -520,7 +524,9 @@ class Tokens:
         if 'character_id' not in session:
             return redirect(url_for('auth_login'))
         corporation_id = int(request.form.get('corporation_id'))
-        self.__tax_records.send_tax_evemail(corporation_id)
+        taxed_corp = self.__tax_records.send_tax_evemail(corporation_id)
+        self.__tax_records.send_slack_messages([taxed_corp])
+        self.__tax_records.send_slack_tax_notif([taxed_corp])
         return redirect(url_for('tokens'))
 
     def tax_evemails(self, balance_threshold: Union[int, None] = None) -> wzResponse:
@@ -535,7 +541,12 @@ class Tokens:
                 balance_threshold = int(threshold_str)
             except ValueError:
                 return redirect(url_for('tokens'))
-        self.__tax_records.send_tax_evemails(balance_threshold, web_called=True)
+        taxed_corps = self.__tax_records.send_tax_evemails(
+            balance_threshold, web_called=True
+        )
+        self.__tax_records.send_slack_messages(taxed_corps)
+        self.__tax_records.send_slack_tax_notif(taxed_corps)
+
         return redirect(url_for('tokens'))
 
     def cancel_evemails(self) -> wzResponse:

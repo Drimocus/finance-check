@@ -390,6 +390,7 @@ class TaxRecords:
             mail_subject,
             logger = self.logger
         )
+        return corp
 
     def send_tax_evemails(
         self,
@@ -419,7 +420,7 @@ class TaxRecords:
         if balance_threshold is not None:
             taxed_corporations = [
                 corp for corp in taxed_corporations if
-                corp["brave_tax_balance"] > balance_threshold
+                corp["brave_tax_balance"] < balance_threshold
             ]
 
         self.logger.info(
@@ -451,9 +452,6 @@ class TaxRecords:
                     write_json_file(self.__config, CONFIG_FILENAME)
                     return taxed_corporations
             body, recipients, mail_subject = prepare_tax_mail(corp, self.__config)
-            if web_called:
-                self.__config['mail_progress'] += 1
-                write_json_file(self.__config, CONFIG_FILENAME)
             # internal rate lim: 5/min, ~13s sleep
             time.sleep(13)
             post_tax_mail(
@@ -464,8 +462,11 @@ class TaxRecords:
                 mail_subject,
                 logger = self.logger
             )
+            if web_called:
+                self.__config['mail_progress'] += 1
+                write_json_file(self.__config, CONFIG_FILENAME)
         if web_called:
-            self.__config['total_mails'] = 0
+            self.__config['mailing'] = False
             write_json_file(self.__config, CONFIG_FILENAME)
         return taxed_corporations
 
