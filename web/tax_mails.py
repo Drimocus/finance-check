@@ -15,15 +15,15 @@ def prefix_str(name_str: str, min_len) -> str:
     return name_str
 
 def prepare_tax_mail(tax_record: dict, config: dict) -> tuple[str, list[dict], str]:
-    """"make body, recipients, mail subject for evemail"""
+    """make body, recipients, mail subject for evemail"""
     tax_month_date = tax_record["tax_month_date"]
     corporation_name =  tax_record["corporation_name"]
     corporation_id = tax_record["id"]
     taxable_income = tax_record["taxable_income"]
     corp_tax_amount = tax_record["corp_tax_amount"]
-    brave_tax_amount = tax_record["brave_tax_amount"]
-    brave_tax_payments = tax_record["brave_tax_payments"]
-    brave_tax_balance = tax_record["brave_tax_balance"]
+    br_tax_amount = tax_record["brave_tax_amount"]
+    br_tax_payments = tax_record["brave_tax_payments"]
+    br_tax_balance = tax_record["brave_tax_balance"]
     corporation_ceo_id = tax_record["corporation_ceo_id"]
     corporation_owner_id = tax_record["corporation_owner_id"]
     is_alt_corp = tax_record["is_alt_corp"]
@@ -41,7 +41,9 @@ def prepare_tax_mail(tax_record: dict, config: dict) -> tuple[str, list[dict], s
         base_tax = config['main_corps_base_tax']
         exempt_amount = config['main_corps_exempt_income']
 
-    previous_balance = brave_tax_balance + brave_tax_amount - brave_tax_payments
+    previous_balance = br_tax_balance + br_tax_amount - br_tax_payments
+    month_str = f"{tax_month_date.strftime("%B")}"
+    year_str = f"{tax_month_date.strftime("%Y")}"
     mail_subject = f"{tax_month_date.strftime("%B")} {tax_month_date.strftime("%Y")} Tax Report"
     recipients = [
         {
@@ -57,53 +59,69 @@ def prepare_tax_mail(tax_record: dict, config: dict) -> tuple[str, list[dict], s
         })
 
     body = (
-        f"This report is automatically generated, replies to this character will not be read.\n"
+        f"This report is automatically generated, replies to this character might not be read.\n"
         f"If you have questions, ask {tax_contact} on slack or post in {tax_help_channel}.\n"
         f"\n"
     )
-    if brave_tax_balance < 0:
-        body += f"TLDR: send {brave_tax_balance*-1:,} to {tax_receiving_corp}\n\n"
+    if br_tax_balance < 0:
+        body += f"TLDR: send {br_tax_balance*-1:,} to {tax_receiving_corp}\n\n"
     else:
-        body += f"TLDR: you already paid us {brave_tax_balance:,} too much, see you next month\n\n"
+        body += f"TLDR: you already paid us {br_tax_balance:,} too much, see you next month\n\n"
+    exempt_amount = min(taxable_income - corp_tax_amount, exempt_amount)
+    brave_tax_str = prefix_str(f'{taxable_income - corp_tax_amount:,} ISK', 23)
+    exempt_str = prefix_str(f"({exempt_amount:,} ISK)", 24)
+    brave_tax_line = (
+        f"Brave Tax Income:{brave_tax_str}\n"
+        f"                 {exempt_str} Exempt\n"
+    )
+    if base_tax > 0:
+        base_tax_string = prefix_str(f"{base_tax:,}", 21)
+        base_tax_line = f"Brave Base Tax:{base_tax_string} ISK\n"
+    else:
+        base_tax_line = ""
     body += (
-        "---- Tax Report ----\n"
-        f"Date:              {prefix_str(f"{tax_month_date.strftime("%B")} - {tax_month_date.strftime("%Y")}", 18)}\n"
-        f"Corporation Name:{prefix_str(corporation_name, 20)}\n"
-        f"Corporation ID:  {prefix_str(str(corporation_id), 20)}\n"
-        f"Tax Income:      {prefix_str(f"{taxable_income:,}", 20)} ISK\n"
-        f"Corp Tax:        {prefix_str(f"{corp_tax_amount:,}", 20)} ISK\n"
-        f"Brave Tax:       {prefix_str(f"{brave_tax_amount:,}", 20)} ISK\n"
-        f"Brave Tax Payments:{prefix_str(f"{brave_tax_payments:,}", 18)} ISK\n"
+        "-------- Tax Report --------\n"
+        f"Date:            {prefix_str(f"{month_str} - {year_str}", 19)}\n"
+        f"Corporation Name:{prefix_str(corporation_name, 19)}\n"
+        f"Corporation ID:  {prefix_str(str(corporation_id), 19)}\n"
+        f"Tax Income:      {prefix_str(f"{taxable_income:,}", 19)} ISK\n"
+        f"Corp Tax Income: {prefix_str(f"{corp_tax_amount:,}", 19)} ISK\n"
+        f"{brave_tax_line}"
+        f"{base_tax_line}"
         f"\n"
-        f"Previous Brave Tax Balance:{prefix_str(f"{previous_balance:,}", 16)} ISK\n"
-        f"Current Brave Tax Balance:" + prefix_str(f"{brave_tax_balance:,}", 15) + " ISK\n"
-        "--------------------\n"
+        f"Brave Tax Amount:  {prefix_str(f"{br_tax_amount:,}", 17)} ISK\n"
+        f"Brave Tax Payments:{prefix_str(f"{br_tax_payments:,}", 17)} ISK\n"
+        f"\n"
+        f"Previous Brave Tax Balance:{prefix_str(f"{previous_balance:,}", 15)} ISK\n"
+        f"Current Brave Tax Balance:" + prefix_str(f"{br_tax_balance:,}", 16) + " ISK\n"
+        "----------------------------\n"
         "\n"
         "Explanation:\n"
         "Tax Income: the total amount your corporation wallet gained from taxes in this month.\n"
     )
     if is_alt_corp:
         body += (
-            "Corp Tax: the amount of your alt corp's monthly tax income that should go to your main corp (50%).\n"
+            "`Corp Tax Income`: The amount of your alt corp's monthly tax income that should go to your main corp (50%).\n"
         )
     else:
         body += (
-            "Corp Tax: the amount of your corp's monthly tax income that your corp can keep for itself (50%).\n"
+            "`Corp Tax Income`: The amount of your corp's monthly tax income that your corp can keep for itself (50%).\n"
         )
     body += (
-        f"Brave Tax: the amount of your corp's monthly tax income that should go to {tax_receiving_corp} (50%)"
+        f"`Brave Tax Income`: The amount of your corp's monthly tax income that should go to {tax_receiving_corp} (50%)"
     )
     if exempt_amount > 0:
-        body += f", your first {exempt_amount:,} ISK of tax income was free from brave taxes."
+        body += f", your first {exempt_amount:,} ISK of tax income was free from brave taxes.\n"
     if base_tax > 0:
-        body += f" This includes the {base_tax:,} ISK base tax for {('alt' if is_alt_corp else 'main')} corps.\n"
+        body += f"`Brave Base Tax`: The {base_tax:,} ISK base tax for {('alt' if is_alt_corp else 'main')} corps, regardless of income.\n"
     else:
         body += ".\n"
     body += (
-        "Brave Tax Payments: the amount of ISK your corporation has transferred to Brave United Holding this month.\n"
+        "`Brave Tax Amount`: The resulting amount you owe Brave for this month.\n"
+        "`Brave Tax Payments`: The amount of ISK your corporation has transferred to Brave United Holding this month.\n"
         "\n"
-        "Previous Brave Tax Balance: Your corp's tax record before this month.\n"
-        "Current Brave Tax Balance: Your corp's current tax record with Brave. If it is negative, this is the amount of tax you still need to pay. If this balance is positive, you overpaid before and do not currently need to pay tax.\n"
+        "`Previous Brave Tax Balance`: Your corp's tax record before this month.\n"
+        "`Current Brave Tax Balance`: Your corp's current tax record with Brave. If it is negative, this is the amount of tax you still need to pay. If this balance is positive, you overpaid before and do not currently need to pay tax.\n"
     )
 
     return body, recipients, mail_subject
